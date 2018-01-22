@@ -66,27 +66,16 @@ module Inc {V T : Set} (J : Judgement V T) where
 
     open import Algebra using (Monoid)
     open import Algebra.Structures using (IsMonoid)
-    open IsMonoid (Monoid.isMonoid (monoid (Judgement V T)))
+    open IsMonoid (Monoid.isMonoid (monoid (Judgement V T))) public
 
     Context-isMonoid : IsMonoid _≡_ _++_ []
     Context-isMonoid = Monoid.isMonoid (monoid (Judgement V T))
 
-    open import Relation.Binary.PartialOrderReasoning poset
-
-    -- infixr 6 _∪_
-
-    -- _∪_ : (R S : Context V T) → Context V T
-    -- R ∪ S = {!   !}
+    open import Relation.Binary.PartialOrderReasoning poset public
 
     propEq : {R S : Context V T} → R ≡ S → R ≈ S
     propEq refl = ≈-refl
 
-    -- cons-∪ : (x : Judgement V T) (R : Context V T) → x , R ≤ x , [] ⊎ x , R ≤ R
-    -- -- cons-∪ x R with J ∈ R
-    -- -- ... | q = {! q  !}
-    -- cons-∪ x [] = inj₁ ≤-refl
-    -- cons-∪ x (r , R) with J ∈ r , R
-    -- ... | q = {! q  !}
 
     cons-mono : (x : Judgement V T) (R S : Context V T) → R ≤ S → x , R ≤ x , S
     cons-mono _ R S R≤S here = here
@@ -105,18 +94,18 @@ module Inc {V T : Set} (J : Judgement V T) where
     insert x [] S = here
     insert x (r , R) S = there (insert x R S)
 
-    prepend : (R S : Context V T) → R ≤ S ++ R
-    prepend []      S       ()
-    prepend (r , R) []      p = p
-    prepend (r , R) (s , S) here = insert r (s , S) R
-    prepend (r , R) (s , S) (there p) = there (prepend (r , R) S (there p))
+    prepend : ∀ {R} S → R ≤ S ++ R
+    prepend {[]}    S       ()
+    prepend {r , R} []      p = p
+    prepend {r , R} (s , S) here = insert r (s , S) R
+    prepend {r , R} (s , S) (there p) = there (prepend S (there p))
 
-    append : (R S : Context V T) → R ≤ R ++ S
-    append []      S ()
-    append (_ , R) S here        = here
-    append (_ , R) S (there J∈R) = there (append R S J∈R)
+    append : ∀ {R} S → R ≤ R ++ S
+    append {[]}    S ()
+    append {_ , R} S here        = here
+    append {_ , R} S (there J∈R) = there (append S J∈R)
 
-    ++-left-mono : ∀ {R S} (T : Context V T) → R ≤ S → T ++ R ≤ T ++ S
+    ++-left-mono : ∀ {R S} T → R ≤ S → T ++ R ≤ T ++ S
     ++-left-mono {R} {S} [] R≤S = R≤S
     ++-left-mono {R} {S} (t , T) R≤S = cons-mono t (T ++ R) (T ++ S) (begin
             T ++ R
@@ -124,7 +113,7 @@ module Inc {V T : Set} (J : Judgement V T) where
             T ++ S
         ∎)
 
-    ++-left-cong : ∀ {R S} (T : Context V T) → R ≈ S → T ++ R ≈ T ++ S
+    ++-left-cong : ∀ {R S} T → R ≈ S → T ++ R ≈ T ++ S
     ++-left-cong {R} {S} T (R≤S -×- S≤R) =
         (++-left-mono {R} {S} T R≤S) -×- (++-left-mono {S} {R} T S≤R)
 
@@ -135,11 +124,11 @@ module Inc {V T : Set} (J : Judgement V T) where
 
     shift-right : ∀ (x : Judgement V T) (R : Context V T) → x , R ≤ R ++ x , []
     shift-right x [] P = P
-    shift-right _ (r , R) here = there (prepend (J , []) R here)
-    shift-right x (r , R) (there P) = cons-mono r R (R ++ x , []) (append R (x , [])) P
+    shift-right _ (r , R) here = there (prepend R here)
+    shift-right x (r , R) (there P) = cons-mono r R (R ++ x , []) (append (x , [])) P
 
     swap : (R S : Context V T) → R ++ S ≤ S ++ R
-    swap [] S = append S []
+    swap [] S = append []
     swap (r , R) [] = begin
             r , R ++ []
         ≈⟨ propEq (proj₂ identity (r , R)) ⟩
@@ -167,97 +156,11 @@ module Inc {V T : Set} (J : Judgement V T) where
         ≤⟨ swap T S ⟩
             S ++ T
         ∎
-    
-    -- ++-right-mono {R} {S} (t , T) R≤S = {!   !}
-    -- ++-right-mono : (R S T : Context V T) → R ≤ S → R ++ T ≤ S ++ T
-    -- ++-right-mono R S [] R≤S = begin
-    --         R ++ []
-    --     ≈⟨ propEq (proj₂ identity R) ⟩
-    --         R
-    --     ≤⟨ R≤S ⟩
-    --         S
-    --     ≈⟨ propEq (sym (proj₂ identity S)) ⟩
-    --         S ++ []
-    --     ∎
-    -- ++-right-mono [] S (t , T) R≤S = prepend (t , T) S
-    -- ++-right-mono (r , R) [] (t , T) R≤S =
-    --     begin
-    --         r , R ++ t , T
-    --     ≈⟨ propEq (sym (assoc (r , R) (t , []) T)) ⟩
-    --         (r , R ++ t , []) ++ T
-    --     ≤⟨ ++-right-mono (r , R ++ t , []) (t , []) T (begin
-    --             r , R ++ t , []
-    --         ≤⟨ shift-right r (R ++ t , []) ⟩
-    --             (R ++ t , []) ++ r , []
-    --         ≤⟨ ++-left-mono (r , []) [] (R ++ t , []) (proj₁ ([]-lemma r R R≤S)) ⟩
-    --             (R ++ t , []) ++ []
-    --         ≈⟨ propEq (proj₂ identity (R ++ t , [])) ⟩
-    --             R ++ t , []
-    --         ≤⟨ ++-right-mono R [] (t , []) (proj₂ ([]-lemma r R R≤S)) ⟩
-    --             t , []
-    --         ∎) ⟩
-    --         (t , []) ++ T
-    --     ∎
-    -- ++-right-mono (r , R) (s , S) (t , T) R≤S = {!   !}
 
-    -- swap : (R S : Context V T) → R ++ S ≈ S ++ R
-    -- swap [] []      = ≈-refl
-    -- swap [] (x , S) = cons-cong x S (S ++ []) (propEq (PropEq.sym (proj₂ identity S)))
-    -- swap (x , R) [] = cons-cong x (R ++ []) R (propEq (proj₂ identity R))
-    -- swap (r , R) (s , S) = to -×- {!   !}
-    --     where
-    --         to : r , R ++ s , S ≤ s , S ++ r , R
-    --         to here = (begin
-    --                 J , []
-    --             ≤⟨ append (J , []) R ⟩
-    --                 J , R
-    --             ≤⟨ prepend (J , R) (s , S) ⟩
-    --                 s , S ++ J , R
-    --             ∎) here
-    --         to (there p) = (begin
-    --                 R ++ s , S
-    --             ≤⟨ {!  !} ⟩
-    --                 {!   !}
-    --             ≤⟨ {!  !} ⟩
-    --                 {!   !}
-    --             ≈⟨ {!  swap  !} ⟩
-    --                 {!   !}
-    --             ≈⟨ {!  swap  !} ⟩
-    --             -- ≈⟨ swap R (s , S) ⟩
-    --             --     s , S ++ R
-    --             -- ≈⟨ {!  swap !} ⟩
-    --                 -- {!   !}
-    --             -- ≤⟨ prepend (R ++ s , S) (r , []) ⟩
-    --             --     r , R ++ s , S
-    --             -- ≈⟨ swap (r , R) (s , S) ⟩
-    --             -- ≈⟨ {!  swap !} ⟩
-    --                 -- {!   !}
-    --                 s , S ++ r , R
-    --             ∎) p
-        --     lemma : ∀ {P Q} → P ≤ Q → J ∈ x , P → J ∈ x , Q
-        --     lemma P≤Q here = here
-        --     lemma P≤Q (there p) = there (P≤Q p)
-
-            -- open import Algebra.Structures
-        -- where
-        --     open
-    -- prepend : (R S : Context V T) → R ≤ S ++ R
-    -- prepend []      S ()
-    -- prepend (_ , R) S here        = here
-    -- prepend (x , R) S (there J∈R) = there (append R S J∈R)
-
-
-
--- Inc : ∀ {V T} (J : Judgement V T) → Rel (Context V T) _
--- Inc J R R' = J ∈ R → J ∈ R'
---
--- ∈-++ : ∀ {V T} (J : Judgement V T) (R R' : Context V T) → Inc J R (R ++ R')
--- ∈-++ J []        R' ()
--- ∈-++ J (.J , xs) R' here        = here
--- ∈-++ J (x  , xs) R' (there J∈R) = there (∈-++ J xs R' J∈R)
---
--- ∈-≡ : ∀ {V T} {J : Judgement V T} {R R' : Context V T} → R ≡ R' → Inc J R R'
--- ∈-≡ {V} {T} {J} {R} {.R} refl = λ x → x
---
--- isPreorder : {!   !}
--- isPreorder = {!   !}
+nub : ∀ {V T : Set} (J K : Judgement V T) (R : Context V T)
+    → J ∈ K , R
+    → K ∈ R
+    → J ∈ R
+nub J K  []      J∈         ()
+nub J .J (r , R) here       K∈ = K∈
+nub J K  (r , R) (there J∈) K∈ = J∈
