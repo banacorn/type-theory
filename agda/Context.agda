@@ -76,7 +76,6 @@ module Inc {V T : Set} (J : Judgement V T) where
     propEq : {R S : Context V T} → R ≡ S → R ≈ S
     propEq refl = ≈-refl
 
-
     cons-mono : (x : Judgement V T) (R S : Context V T) → R ≤ S → x , R ≤ x , S
     cons-mono _ R S R≤S here = here
     cons-mono x R S R≤S (there p) = there (R≤S p)
