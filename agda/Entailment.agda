@@ -1,29 +1,36 @@
-module Entailment (Judgement : Set) where
+open import Relation.Binary
+
+module Entailment {c ℓ} (JudgementDecSetoid : DecSetoid c ℓ) where
 
 open import Data.List public
 open import Level
+open import Relation.Nullary
 
-Context : Set
+
+open DecSetoid JudgementDecSetoid renaming (Carrier to Judgement)
+
+Context : Set c
 Context = List Judgement
 
-Rule : Set₁
+Rule : Set (suc zero ⊔ c)
 Rule = Context → Judgement → Set
 
-open import Relation.Binary
 open import Data.Product
+import DecSetoidMembership
+open DecSetoidMembership JudgementDecSetoid
 
 import Membership
-open Membership Judgement
 open Membership Rule using () renaming (_∈_ to _∈ᵣ_; _⊆_ to _⊆ᵣ_)
 module R = Membership Rule
 
-record Legit (Γ : Context) (R : List Rule) (J : Judgement) : Set₁ where
+record Legit (Γ : Context) (R : List Rule) (J : Judgement) : Set (suc zero ⊔ c ⊔ ℓ) where
     constructor lgt
     field
         subcontext : ∃[ Δ ] (Δ ⊆ Γ)
         rule       : ∃[ r ] (r ∈ᵣ R)
         legit      : (proj₁ rule) (proj₁ subcontext) J
-        -- trans      : (proj₁ rule)
+
+        map' : ∀ {Δ Δ' R R' J} → Δ ⊆ Δ' → R ⊆ᵣ R' → legit Δ R J → legit Δ' R' J
 
 bimap : ∀ {Γ Γ' R R' J} → Γ ⊆ Γ' → R ⊆ᵣ R' → Legit Γ R J → Legit Γ' R' J
 bimap Γ⊆Γ' R⊆R' L = record
@@ -48,10 +55,20 @@ Legit-Context-trans : ∀ {Γ K R J} → K ∈ Γ → Legit (K ∷ Γ) R J → L
 Legit-Context-trans K∈Γ = mapContext (nub K∈Γ)
 
 Legit-trans : ∀ {R Γ K J} → Legit Γ R K → Legit (K ∷ Γ) R J → Legit Γ R J
-Legit-trans {R} {Γ} {K} {J} Γ⊢K K∷Γ⊢J with Legit.subcontext K∷Γ⊢J
-Legit-trans {R} {Γ} {K} {J} Γ⊢K K∷Γ⊢J | subctx , subctx⊆K∷Γ = {!   !}
+Legit-trans {R} {Γ} {K} {J} Γ⊢K K∷Γ⊢J with K ∈? (proj₁ (Legit.subcontext Γ⊢K))
+Legit-trans {R} {Γ} {K} {J} Γ⊢K K∷Γ⊢J | yes p = {!   !}
     where
         open Legit
+
+        Δ : List Judgement
+        Δ = proj₁ (Legit.subcontext Γ⊢K)
+
+        P0 : K ∷ Δ ⊆ Δ
+        P0 = nub {Δ} {K} p
+Legit-trans {R} {Γ} {K} {J} Γ⊢K K∷Γ⊢J | no ¬p = {!   !}
+
+        -- P0 : K  :
+        -- nub {proj₁ (Legit.subcontext Γ⊢K)} {K} p
 -- Legit-trans {R} {Γ} {K} {J} Γ⊢K K,Γ⊢J = lgt (subctx , subctx⊆Γ) (rule K,Γ⊢J) (legit K,Γ⊢J)
     --
     --     -- K ∷ Γ
@@ -99,7 +116,7 @@ data _⊢_[_] : Context → Judgement → (List Rule) → Set₁ where
 -- Reflexivity: Every judgment is a consequence of itself: J , Γ ⊢ J.
 --              Each hypothesis justifies itself as conclusion.
 ⊢-refl : ∀ {R Γ J} → J ∷ Γ ⊢ J [ R ]
-⊢-refl = in-context here
+⊢-refl = in-context (here {!   !})
 
 -- Weakening:   If Γ ⊢ J, then K, Γ ⊢ J.
 --              Entailment is not influenced by un-exercised options.
@@ -113,7 +130,7 @@ data _⊢_[_] : Context → Judgement → (List Rule) → Set₁ where
 --               derivation of it, the result is a derivation of its consequent
 --               without that hypothesis.
 ⊢-trans : ∀ {R Γ J K} → K ∷ Γ ⊢ J [ R ] → Γ ⊢ K [ R ] → Γ ⊢ J [ R ]
-⊢-trans (in-context here) Γ⊢K = Γ⊢K
+⊢-trans (in-context (here p)) Γ⊢K = {!   !}
 ⊢-trans (in-context (there ∈Context)) Γ⊢K = in-context ∈Context
 ⊢-trans (by-rules L) (in-context K∈Γ) = by-rules (mapContext (nub K∈Γ) L)
 ⊢-trans {R} {Γ} {J} {K} (by-rules L) (by-rules M)  = by-rules {!   !}
