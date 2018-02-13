@@ -9,7 +9,7 @@ module Membership.Core {c ℓ}
 
 open import Data.Product using (_×_; _,_; proj₁; proj₂)
 
-open IsEquivalence isEquivalence
+open IsEquivalence isEquivalence public
 
 -- Membership
 infix 3 _∈_
@@ -82,7 +82,7 @@ open IsMonoid (Monoid.isMonoid (monoid Carrier)) using (identity; assoc)
 -- Context-isMonoid : IsMonoid _≋_ _++_ []
 -- Context-isMonoid = Monoid.isMonoid {!  monoid Carrier !}
 
-open import Relation.Binary.PartialOrderReasoning ⊆-poset
+open import Relation.Binary.PartialOrderReasoning ⊆-poset public
 
 ≡→≋ : {R S : List Carrier} → R ≡ S → R ≋ S
 ≡→≋ PropEq.refl = ≋-refl
