@@ -214,17 +214,24 @@ Subst₁-lemma2 B a b x b≡x with b ≟str x
 Subst₁-lemma2 B a b x b≡x | yes p = refl
 Subst₁-lemma2 B a b x b≡x | no ¬p = contradiction b≡x ¬p
 
+Subst₁-lemma3 : ∀ B a b x
+    → b ≢ x
+    → (var b ∶ B) [ var a / x ]J ≡ var b ∶ B [ var a / x ]
+Subst₁-lemma3 B a b x b≢x with b ≟str x
+Subst₁-lemma3 B a b x b≢x | yes p = contradiction p b≢x
+Subst₁-lemma3 B a b x b≢x | no ¬p = refl
+
 Subst₁ : ∀ Γ Δ A B {a} {b} x
     →                   Γ ⊢ a           ∶ A             -- JA
     →  Δ ++ var x ∶ A ∷ Γ ⊢ b           ∶ B             -- JB
     → (Δ ++ Γ) [ a / x ]C ⊢ b [ a / x ] ∶ B [ a / x ]
 Subst₁ [] Δ A B x (Vble CTX-JA A∶𝒰 a ()) (Vble CTX-JB B∶𝒰 b b∶B)
 Subst₁ (J ∷ Γ) [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) with b ≟str x
-Subst₁ (J ∷ Γ) [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble (ctx-EXT _ prop') B∶𝒰 b b∶B) | yes p =
+Subst₁ (J ∷ Γ) [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble (ctx-EXT _ prop) B∶𝒰 b b∶B) | yes p =
     Vble ctx hasType a hasVar
     where
         lemma : (J ∷ Γ) [ var a / x ]C ≡ J ∷ Γ
-        lemma = Subst₁-lemma1 _ a x prop'
+        lemma = Subst₁-lemma1 _ a x prop
 
         ctx : CTX ((J ∷ Γ) [ var a / x ]C)
         ctx = subst CTX (sym lemma) CTX-JA
@@ -249,7 +256,33 @@ Subst₁ (J ∷ Γ) [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble (ctx-EXT _ pro
         hasVar : var a ∶ B [ var a / x ] ∈ (J ∷ Γ) [ var a / x ]C
         hasVar = substitution-lemma1 (J ∷ Γ) A (var a) x a∶A hasVar'
 
-Subst₁ (J ∷ Γ) [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) | no ¬p = {!   !}
+Subst₁ (J ∷ Γ) [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble (ctx-EXT _ prop) B∶𝒰 b b∶B) | no ¬p =
+    Vble ctx hasType b hasVar
+    where
+        lemma : (J ∷ Γ) [ var a / x ]C ≡ J ∷ Γ
+        lemma = Subst₁-lemma1 _ a x prop
+
+        ctx : CTX ((J ∷ Γ) [ var a / x ]C)
+        ctx = subst CTX (sym lemma) CTX-JA
+
+        hasType' : B [ var a / x ] ∶ _ 𝒰 ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C
+        hasType' = judgement-substitution-mono (var x ∶ A ∷ J ∷ Γ) (B ∶ _ 𝒰) (var a) x B∶𝒰
+
+        hasType : B [ var a / x ] ∶ _ 𝒰 ∈ (J ∷ Γ) [ var a / x ]C
+        hasType = substitution-lemma1 (J ∷ Γ) A (var a) x a∶A hasType'
+
+        hasVar'' : (var b ∶ B) [ var a / x ]J ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C
+        hasVar'' = judgement-substitution-mono (var x ∶ A ∷ J ∷ Γ) (var b ∶ B) (var a) x b∶B
+        --
+        lemma2 : (var b ∶ B) [ var a / x ]J ≡ var b ∶ B [ var a / x ]
+        lemma2 = Subst₁-lemma3 B a b x ¬p
+
+        hasVar' : var b ∶ B [ var a / x ] ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C
+        hasVar' = subst (λ w → w ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C) lemma2 hasVar''
+
+        hasVar : var b ∶ B [ var a / x ] ∈ (J ∷ Γ) [ var a / x ]C
+        hasVar = substitution-lemma1 (J ∷ Γ) A (var a) x a∶A hasVar' -- substitution-lemma1 (J ∷ Γ) A (var a) x a∶A hasVar'
+
 Subst₁ (J ∷ Γ) (K ∷ Δ) A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) = {!   !}
 -- Subst₁ Γ [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble (ctx-EXT typ prop) B∶𝒰 b b∶B) | yes p
 --     -- = Vble context hasType a hasVar
