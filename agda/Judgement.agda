@@ -49,7 +49,11 @@ _[_/_]J : Judgement → Term → Variable → Judgement
 (    A ∶ 𝒾 𝒰) [ expr / x ]J = A [ expr / x ] ∶ 𝒾 𝒰
 (A ≣ B ∶ 𝒾 𝒰) [ expr / x ]J = A [ expr / x ] ≣ B [ expr / x ] ∶ 𝒾 𝒰
 
-
+_FreshInJudgement_ : Variable → Judgement → Set
+variable FreshInJudgement (    a ∶ A)   = variable FreshIn a × variable FreshIn A
+variable FreshInJudgement (a ≣ b ∶ A)   = variable FreshIn a × variable FreshIn b × variable FreshIn A
+variable FreshInJudgement (    A ∶ 𝒾 𝒰) = variable FreshIn A
+variable FreshInJudgement (A ≣ B ∶ 𝒾 𝒰) = variable FreshIn A × variable FreshIn B
     -- open import Membership Judgement
 
 -- ++-context-substitution : ∀ {e x} Γ Δ → (Γ ++ Δ) [ e / x ]C ≋ Γ [ e / x ]C ++ Δ [ e / x ]C
@@ -116,32 +120,33 @@ substitution-lemma1 (J ∷ Γ) A a x P =
         (J ∷ Γ) [ a / x ]C
     ∎
 
--- mutual
---
---     -- The item of Context should be of the form _∶_
---     -- and distinct from the supposedly fresh variable
---     CtxProp : Variable → Judgement → Set
---     CtxProp v (var x ∶ A)   = v ≢ x × v FreshIn A
---     CtxProp v (a ≣ b ∶ A)   = ⊥
---     CtxProp v (    A ∶ 𝒾 𝒰) = ⊥
---     CtxProp v (A ≣ B ∶ 𝒾 𝒰) = ⊥
---
---     data CTX : List Judgement → Set where
---         ctx-EMP : CTX []
---         ctx-EXT : ∀ {𝒾 Γ A x}
---             → Γ ⊢ A ∶ 𝒾 𝒰
---             → All (CtxProp x) Γ
---             → CTX ((var x ∶ A) ∷ Γ)
---
---     infix 3 _⊢_
---     data _⊢_ : Context → Judgement → Set where
---         Vble : ∀ {Γ 𝒾 A}
---             → CTX Γ
---             → A ∶ 𝒾 𝒰 ∈ Γ
---             → (x : Variable)
---             → var x ∶ A ∈ Γ
---             ------------------------------ Vble
---             → Γ ⊢ var x ∶ A
+mutual
+
+    OfHasType : Judgement → Set
+    OfHasType (    a ∶ A) = ⊤
+    OfHasType (a ≣ b ∶ A) = ⊥
+    OfHasType (    A ∶ 𝒾 𝒰) = ⊥
+    OfHasType (A ≣ B ∶ 𝒾 𝒰) = ⊥
+
+    IsCTX : Variable → Judgement → Set
+    IsCTX variable judgement = OfHasType judgement × variable FreshInJudgement judgement
+
+    data CTX : List Judgement → Set where
+        ctx-EMP : CTX []
+        ctx-EXT : ∀ {𝒾 Γ A x}
+            → (hasUniv : Γ ⊢ A ∶ 𝒾 𝒰)
+            → (allCTX : All (IsCTX x) Γ)
+            → CTX ((var x ∶ A) ∷ Γ)
+
+    infix 3 _⊢_
+    data _⊢_ : Context → Judgement → Set where
+        Vble : ∀ {Γ 𝒾 A}
+            → (isCTX : CTX Γ)
+            → (A∶𝒰  : A ∶ 𝒾 𝒰 ∈ Γ)
+            → (x     : Variable)
+            → (x∶A   : var x ∶ A ∈ Γ)
+            ------------------------------ Vble
+            → Γ ⊢ var x ∶ A
 -- --
 -- --         -- Wkg₁ : ∀ {Γ Δ 𝒾 A B b} {x : Variable}
 -- --         --     →                  Γ ⊢ A ∶ 𝒾 𝒰
@@ -158,40 +163,65 @@ substitution-lemma1 (J ∷ Γ) A a x P =
 -- --         --     → Δ ++             Γ ⊢ b ≡ c ∶ B
 -- --         --     → Δ ++ var x ∶ A ∷ Γ ⊢ b ≡ c ∶ B
 -- --
---         ≣-refl : ∀ {Γ A a}
---             → Γ ⊢ a ∶ A
---             ------------------------------
---             → Γ ⊢ a ≣ a ∶ A
+        ≣-refl : ∀ {Γ A a}
+            → Γ ⊢ a ∶ A
+            ------------------------------
+            → Γ ⊢ a ≣ a ∶ A
+
+        ≣-sym : ∀ {Γ A a b}
+            → Γ ⊢ a ≣ b ∶ A
+            ------------------------------
+            → Γ ⊢ b ≣ a ∶ A
+
+        ≣-trans : ∀ {Γ A a b c}
+            → Γ ⊢ a ≣ b ∶ A
+            → Γ ⊢ b ≣ c ∶ A
+            ------------------------------
+            → Γ ⊢ a ≣ c ∶ A
+
+        transport-∶ : ∀ {Γ 𝒾 A B a}
+            → Γ ⊢ a ∶ A
+            → Γ ⊢ A ≣ B ∶ 𝒾 𝒰
+            ------------------------------
+            → Γ ⊢ a ∶ B
+
+        transport-≣ : ∀ {Γ 𝒾 A B a b}
+            → Γ ⊢ a ≣ b ∶ A
+            → Γ ⊢ A ≣ B ∶ 𝒾 𝒰
+            ------------------------------
+            → Γ ⊢ a ≣ b ∶ B
+
+        𝒰-CUMUL : ∀ {Γ 𝒾 A}
+            → Γ ⊢ A ∶     𝒾 𝒰
+            ------------------------------
+            → Γ ⊢ A ∶ suc 𝒾 𝒰
 --
---         ≣-sym : ∀ {Γ A a b}
---             → Γ ⊢ a ≣ b ∶ A
---             ------------------------------
---             → Γ ⊢ b ≣ a ∶ A
---
---         ≣-trans : ∀ {Γ A a b c}
---             → Γ ⊢ a ≣ b ∶ A
---             → Γ ⊢ b ≣ c ∶ A
---             ------------------------------
---             → Γ ⊢ a ≣ c ∶ A
---
---         transport-∶ : ∀ {Γ 𝒾 A B a}
---             → Γ ⊢ a ∶ A
---             → Γ ⊢ A ≣ B ∶ 𝒾 𝒰
---             ------------------------------
---             → Γ ⊢ a ∶ B
---
---         transport-≣ : ∀ {Γ 𝒾 A B a b}
---             → Γ ⊢ a ≣ b ∶ A
---             → Γ ⊢ A ≣ B ∶ 𝒾 𝒰
---             ------------------------------
---             → Γ ⊢ a ≣ b ∶ B
---
---         𝒰-CUMUL : ∀ {Γ 𝒾 A}
---             → Γ ⊢ A ∶     𝒾 𝒰
---             ------------------------------
---             → Γ ⊢ A ∶ suc 𝒾 𝒰
---
---
+
+Subst₁-empty-context : ∀ Γ Δ A {a x}
+    → (Δ ++ Γ) [ var a / x ]C ≡ []
+    → var a ∶ A ∈ Γ
+    → ⊥
+Subst₁-empty-context []      Δ A empty ()
+Subst₁-empty-context (J ∷ Γ) Δ A empty a∶A = contradiction empty (must-not-be-empty Γ Δ J)
+    where
+        must-not-be-empty : ∀ Γ Δ J {a x} → (Δ ++ J ∷ Γ) [ var a / x ]C ≢ []
+        must-not-be-empty []      []      J ()
+        must-not-be-empty []      (_ ∷ Δ) J ()
+        must-not-be-empty (_ ∷ Γ) []      J ()
+        must-not-be-empty (_ ∷ Γ) (_ ∷ Δ) J ()
+
+
+Subst₁ : ∀ Γ Δ A B {a} {b} x
+    →                   Γ ⊢ a           ∶ A             -- JA
+    →  Δ ++ var x ∶ A ∷ Γ ⊢ b           ∶ B             -- JB
+    → (Δ ++ Γ) [ a / x ]C ⊢ b [ a / x ] ∶ B [ a / x ]
+Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) Q with (Δ ++ Γ) [ var a / x ]C | inspect (λ C → C [ var a / x ]C) (Δ ++ Γ)
+Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) Q | [] | inspect[ eq ] = contradiction a∶A (Subst₁-empty-context Γ Δ A eq)
+Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) Q | J ∷ E | eq = {!   !}
+Subst₁ Γ Δ A B x (transport-∶ P P₁) Q = {!   !}
+
+
+
 -- Subst₁-lemma1 : ∀ Γ e x
 --     → (ctx : All (CtxProp x) Γ)
 --     → Γ [ var e / x ]C ≡ Γ
