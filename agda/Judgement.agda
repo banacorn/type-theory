@@ -7,11 +7,7 @@ open import Data.String using (String) renaming (_≟_ to _≟str_)
 open import Relation.Nullary
 open import Relation.Nullary.Negation using (contradiction)
 open import Relation.Binary
-open import Relation.Binary.PropositionalEquality as PE using (_≡_)
-
-
-
--- data Variable : Set where
+open import Relation.Binary.PropositionalEquality as PropEq hiding ([_])
 
 Variable : Set
 Variable = String
@@ -19,7 +15,26 @@ Variable = String
 data Term : Set where
     var : String → Term
 
+-- Term substitution
+infix 200 _[_/_]
+_[_/_] : Term → Term → Variable → Term
+var x [ expr / variable ] with x ≟str variable
+var x [ expr / variable ] | yes p = expr
+var x [ expr / variable ] | no ¬p = var x
 
+
+_FreshIn_ : Variable → Term → Set
+variable FreshIn var x = x ≢ variable
+
+fresh-substitution : ∀ {term variable expr}
+    → variable FreshIn term
+    → term [ expr / variable ] ≡ term
+fresh-substitution {var x} {variable} fresh with x ≟str variable
+fresh-substitution {var x} {variable} fresh | yes p = contradiction p fresh
+fresh-substitution {var x} {variable} fresh | no ¬p = refl
+
+
+-- Four kinds of Judgements
 infix 100 _∶_ _≣_∶_ _∶_𝒰 _≣_∶_𝒰
 data Judgement : Set where
     _∶_     : (a A : Term) → Judgement
@@ -27,51 +42,53 @@ data Judgement : Set where
     _∶_𝒰   : (A : Term) → (𝒾 : ℕ) → Judgement
     _≣_∶_𝒰 : (A B : Term) → (𝒾 : ℕ) → Judgement
 
-Context : Set
-Context = List Judgement
-
-open import Membership Judgement
-
-infix 200 _[_/_]
-_[_/_] : Term → Term → Variable → Term
-var x' [ expr / x ] with x' ≟str x
-var x' [ expr / x ] | yes p = expr
-var x' [ expr / x ] | no ¬p = var x'
-
+-- Judgement substitution
+infix 200 _[_/_]J
 _[_/_]J : Judgement → Term → Variable → Judgement
 (    a ∶ A)   [ expr / x ]J = a [ expr / x ] ∶ A [ expr / x ]
 (a ≣ b ∶ A)   [ expr / x ]J = a [ expr / x ] ≣ b [ expr / x ] ∶ A [ expr / x ]
 (    A ∶ 𝒾 𝒰) [ expr / x ]J = A [ expr / x ] ∶ 𝒾 𝒰
 (A ≣ B ∶ 𝒾 𝒰) [ expr / x ]J = A [ expr / x ] ≣ B [ expr / x ] ∶ 𝒾 𝒰
 
-infix 200 _[_/_]'
-_[_/_]' : Context → Term → Variable → Context
-context [ expr / x ]' = map (λ w → w [ expr / x ]J) context
 
-++-context-substitution : ∀ {e x} Γ Δ → (Γ ++ Δ) [ e / x ]' ≋ Γ [ e / x ]' ++ Δ [ e / x ]'
-++-context-substitution {e} {x} Γ Δ = ≡→≋ (map-++-commute (λ w → w [ e / x ]J) Γ Δ)
-    where
-        open import Data.List.Properties using (map-++-commute)
+    -- open import Membership Judgement
+
+-- ++-context-substitution : ∀ {e x} Γ Δ → (Γ ++ Δ) [ e / x ]C ≋ Γ [ e / x ]C ++ Δ [ e / x ]C
+-- ++-context-substitution {e} {x} Γ Δ = ≡→≋ (map-++-commute (λ w → w [ e / x ]J) Γ Δ)
+--     where
+--         open import Data.List.Properties using (map-++-commute)
+--
+Context : Set
+Context = List Judgement
+
+infix 200 _[_/_]C
+_[_/_]C : Context → Term → Variable → Context
+context [ expr / x ]C = map (λ j → j [ expr / x ]J) context
+
+open import Data.List.All as All
+open import Data.Unit
+open import Data.Empty
+open import Membership Judgement
+
+judgement-substitution-mono : ∀ Γ J e x → J ∈ Γ → (J [ e / x ]J) ∈ Γ [ e / x ]C
+judgement-substitution-mono Γ J e x (here  p) = here  (cong (λ w → w [ e / x ]J) p)
+judgement-substitution-mono Γ J e x (there p) = there (judgement-substitution-mono _ J e x p)
 
 sbst-lemma210 : ∀ a x → a ≡ a [ a / x ]
 sbst-lemma210 (var x') x with x ≟str x | x' ≟str x
-sbst-lemma210 (var x') x | yes p | yes q = PE.refl
-sbst-lemma210 (var x') x | yes p | no ¬q = PE.refl
-sbst-lemma210 (var x') x | no ¬p | yes q = PE.refl
-sbst-lemma210 (var x') x | no ¬p | no ¬q = PE.refl
+sbst-lemma210 (var x') x | yes p | yes q = refl
+sbst-lemma210 (var x') x | yes p | no ¬q = refl
+sbst-lemma210 (var x') x | no ¬p | yes q = refl
+sbst-lemma210 (var x') x | no ¬p | no ¬q = refl
 
 sbst-lemma21 : ∀ A a x → (var x ∶ A) [ a / x ]J ≡ (a ∶ A) [ a / x ]J
 sbst-lemma21 A a x with x ≟str x
-sbst-lemma21 A a x | yes p = PE.cong (λ w → w ∶ A [ a / x ]) (sbst-lemma210 a x)
-sbst-lemma21 A a x | no ¬p = contradiction PE.refl ¬p
+sbst-lemma21 A a x | yes p = cong (λ w → w ∶ A [ a / x ]) (sbst-lemma210 a x)
+sbst-lemma21 A a x | no ¬p = contradiction refl ¬p
 
-judgement-substitution-mono : ∀ Γ J e x → J ∈ Γ → (J [ e / x ]J) ∈ Γ [ e / x ]'
-judgement-substitution-mono Γ J e x (here  p) = here  (PE.cong (λ w → w [ e / x ]J) p)
-judgement-substitution-mono Γ J e x (there p) = there (judgement-substitution-mono _ J e x p)
-
-context-substitution-mono : ∀ Γ Δ e x → Γ ⊆ Δ → Γ [ e / x ]' ⊆ Δ [ e / x ]'
+context-substitution-mono : ∀ Γ Δ e x → Γ ⊆ Δ → Γ [ e / x ]C ⊆ Δ [ e / x ]C
 context-substitution-mono [] Δ e x P ()
-context-substitution-mono (J ∷ Γ) Δ e x P (here PE.refl) = judgement-substitution-mono Δ J e x (P (here PE.refl))
+context-substitution-mono (J ∷ Γ) Δ e x P (here refl) = judgement-substitution-mono Δ J e x (P (here refl))
 context-substitution-mono (J ∷ Γ) Δ e x P (there Q) = context-substitution-mono Γ Δ e x (
     begin
         Γ
@@ -80,86 +97,62 @@ context-substitution-mono (J ∷ Γ) Δ e x P (there Q) = context-substitution-m
     ≤⟨ P ⟩
         Δ
     ∎) Q
--- context-substitution-mono []      Δ a x P = λ ()
--- context-substitution-mono (J ∷ Γ) Δ a x P =
---     begin
---         (J ∷ Γ) [ a / x ]'
---     ≈⟨ ≋-refl ⟩
---         (J [ a / x ]J) ∷ Γ [ a / x ]'
---     ≈⟨ {!   !} ⟩
---         {!   !}
---     ≤⟨ {!  nub P !} ⟩
---         Δ [ a / x ]'
---     ∎
 
-sbst-lemma2 : ∀ Γ A a x → a ∶ A ∈ Γ → (var x ∶ A ∷ Γ) [ a / x ]' ⊆ Γ [ a / x ]'
-sbst-lemma2 [] A a x ()
-sbst-lemma2 (J ∷ Γ) A a x P =
+substitution-lemma1 : ∀ Γ A a x → a ∶ A ∈ Γ → (var x ∶ A ∷ Γ) [ a / x ]C ⊆ Γ [ a / x ]C
+substitution-lemma1 [] A a x ()
+substitution-lemma1 (J ∷ Γ) A a x P =
     begin
-        (var x ∶ A ∷ (J ∷ Γ)) [ a / x ]'
+        (var x ∶ A ∷ (J ∷ Γ)) [ a / x ]C
     ≈⟨ ≋-refl ⟩
-        (var x ∶ A) [ a / x ]J ∷ (J ∷ Γ) [ a / x ]'
-    ≈⟨ ≡→≋ (PE.cong (λ p → p ∷ (J ∷ Γ) [ a / x ]') (sbst-lemma21 A a x)) ⟩
-        (a ∶ A ∷ J ∷ Γ) [ a / x ]'
+        (var x ∶ A) [ a / x ]J ∷ (J ∷ Γ) [ a / x ]C
+    ≈⟨ ≡→≋ (cong (λ p → p ∷ (J ∷ Γ) [ a / x ]C) (sbst-lemma21 A a x)) ⟩
+        (a ∶ A ∷ J ∷ Γ) [ a / x ]C
     ≤⟨ context-substitution-mono (_ ∶ _ ∷ J ∷ Γ) (J ∷ Γ) a x (nub P) ⟩
-        (J ∷ Γ) [ a / x ]'
+        (J ∷ Γ) [ a / x ]C
     ∎
 
-
--- sbst-lemma2 (.(a ∶ A) ∷ Γ) A a x (here PE.refl) = {!   !}
--- sbst-lemma2 (J ∷ Γ) A a x (there P) = {!   !}
-
-
-
-    -- begin
-    --     (var x ∶ A ∷ (J ∷ Γ)) [ a / x ]'
-    -- ≈⟨ ≋-refl ⟩
-    --     sbstJudgement a x (var x ∶ A) ∷ (J ∷ Γ) [ a / x ]'
-    -- ≈⟨ ≡→≋ (PE.cong (λ p → p ∷ (J ∷ Γ) [ a / x ]') (sbst-lemma20 A a x)) ⟩
-    --     a ∶ A [ a / x ] ∷ (J ∷ Γ) [ a / x ]'
-    -- ≤⟨ {!   !} ⟩
-    --     a ∶ A ∷ J ∷ Γ
-    -- ≤⟨ nub P ⟩
-    --     J ∷ Γ
-    -- ∎
--- sbst-lemma2 .(a ∶ A ∷ _) A a x (here PE.refl) = {!   !}
--- sbst-lemma2 .(_ ∷ _) A a x (there P) = {!   !}
-    -- where
-    --     open
-    -- Q , {!   !}
-    -- where
-    --     Q : (var x ∶ A ∷ Γ) [ a / x ]' ⊆ Γ
-    --     Q = {!   !}
-
 mutual
-    data CTX : Context → Set where
+
+    -- The item of Context should be of the form _∶_
+    -- and distinct from the supposedly fresh variable
+    CtxProp : Variable → Judgement → Set
+    CtxProp v (var x ∶ A)   = v ≢ x × v FreshIn A
+    CtxProp v (a ≣ b ∶ A)   = ⊥
+    CtxProp v (    A ∶ 𝒾 𝒰) = ⊥
+    CtxProp v (A ≣ B ∶ 𝒾 𝒰) = ⊥
+
+    data CTX : List Judgement → Set where
         ctx-EMP : CTX []
-        ctx-EXT : ∀ {Γ 𝒾 A x} → Γ ⊢ A ∶ 𝒾 𝒰 → CTX ((x ∶ A) ∷ Γ)
+        ctx-EXT : ∀ {𝒾 Γ A x}
+            → Γ ⊢ A ∶ 𝒾 𝒰
+            → All (CtxProp x) Γ
+            → CTX ((var x ∶ A) ∷ Γ)
 
     infix 3 _⊢_
     data _⊢_ : Context → Judgement → Set where
-        in-context : ∀ {J Γ} → J ∈ Γ → Γ ⊢ J
-
-        Vble : ∀ {Γ A} {x : Variable}
+        Vble : ∀ {Γ 𝒾 A}
             → CTX Γ
-            ------------------------------
+            → A ∶ 𝒾 𝒰 ∈ Γ
+            → (x : Variable)
+            → var x ∶ A ∈ Γ
+            ------------------------------ Vble
             → Γ ⊢ var x ∶ A
-
-        -- Wkg₁ : ∀ {Γ Δ 𝒾 A B b} {x : Variable}
-        --     →                  Γ ⊢ A ∶ 𝒾 𝒰
-        --     → Δ ++             Γ ⊢ b ∶ B
-        --     → Δ ++ var x ∶ A ∷ Γ ⊢ b ∶ B
-        --
-        -- Subst₂ : ∀ {Γ Δ A B a b c} {x : Variable}
-        --     →                             Γ ⊢ a                         ∶ A
-        --     → Δ            ++ var x ∶ A ∷ Γ ⊢ b           ≡ c           ∶ B
-        --     → Δ [ a / x ]' ++             Γ ⊢ b [ a / x ] ≡ c [ a / x ] ∶ B [ a / x ]
-        --
-        -- Wkg₂ : ∀ {Γ Δ 𝒾 A B b c} {x : Variable}
-        --     →                  Γ ⊢     A ∶ 𝒾 𝒰
-        --     → Δ ++             Γ ⊢ b ≡ c ∶ B
-        --     → Δ ++ var x ∶ A ∷ Γ ⊢ b ≡ c ∶ B
-
+--
+--         -- Wkg₁ : ∀ {Γ Δ 𝒾 A B b} {x : Variable}
+--         --     →                  Γ ⊢ A ∶ 𝒾 𝒰
+--         --     → Δ ++             Γ ⊢ b ∶ B
+--         --     → Δ ++ var x ∶ A ∷ Γ ⊢ b ∶ B
+--         --
+--         -- Subst₂ : ∀ {Γ Δ A B a b c} {x : Variable}
+--         --     →                             Γ ⊢ a                         ∶ A
+--         --     → Δ            ++ var x ∶ A ∷ Γ ⊢ b           ≡ c           ∶ B
+--         --     → Δ [ a / x ]C ++             Γ ⊢ b [ a / x ] ≡ c [ a / x ] ∶ B [ a / x ]
+--         --
+--         -- Wkg₂ : ∀ {Γ Δ 𝒾 A B b c} {x : Variable}
+--         --     →                  Γ ⊢     A ∶ 𝒾 𝒰
+--         --     → Δ ++             Γ ⊢ b ≡ c ∶ B
+--         --     → Δ ++ var x ∶ A ∷ Γ ⊢ b ≡ c ∶ B
+--
         ≣-refl : ∀ {Γ A a}
             → Γ ⊢ a ∶ A
             ------------------------------
@@ -176,13 +169,13 @@ mutual
             ------------------------------
             → Γ ⊢ a ≣ c ∶ A
 
-        ≣-transport₁ : ∀ {Γ 𝒾 A B a}
+        transport-∶ : ∀ {Γ 𝒾 A B a}
             → Γ ⊢ a ∶ A
             → Γ ⊢ A ≣ B ∶ 𝒾 𝒰
             ------------------------------
             → Γ ⊢ a ∶ B
 
-        ≣-transport₂ : ∀ {Γ 𝒾 A B a b}
+        transport-≣ : ∀ {Γ 𝒾 A B a b}
             → Γ ⊢ a ≣ b ∶ A
             → Γ ⊢ A ≣ B ∶ 𝒾 𝒰
             ------------------------------
@@ -193,51 +186,144 @@ mutual
             ------------------------------
             → Γ ⊢ A ∶ suc 𝒾 𝒰
 
-            -- Γ ctx Γ⊢U :U
-            -- U-INTRO
-            -- Γ ⊢ A : Ui
-            -- Γ⊢A:U U-CUMUL
-            -- i+1
-            --   i
-            -- i+
-            -- Γ⊢A:Ui Γ,x:A⊢B:Ui Γ,x:A⊢b≡b′ :B Π-INTRO-EQ Γ ⊢ λx.b ≡ λx.b′ : ∏(x:A)B
 
-
-            -- Γ ⊢ A : Ui Γ, ∆ ⊢ b : B Wkg Γ,x:A,∆ ⊢ b : B 1
-            -- Γ ⊢ A : Ui Γ, ∆ ⊢ b ≡ c : B Wkg Γ, x:A, ∆ ⊢ b ≡ c : B 2
-            --   Γ, ∆[a/x] ⊢ b[a/x] ≡ c[a/x] : B[a/x] 2
-    -- by-rule : ∀ {Γ J K R} → Γ ⊢ J [ R ] → Γ ⊢ K [ R ] → Γ ⊢ R J K [ R ]
-Subst₁ : ∀ Γ Δ A B a b {x : Variable}
-    →                   Γ ⊢ a           ∶ A
-    → Δ  ++ var x ∶ A ∷ Γ ⊢ b           ∶ B
-    → (Δ ++ Γ) [ a / x ]' ⊢ b [ a / x ] ∶ B [ a / x ]
-Subst₁ Γ Δ A B a b {x} (in-context P) (in-context Q) = in-context (lemma start)
+Subst₁-lemma1 : ∀ Γ e x
+    → (ctx : All (CtxProp x) Γ)
+    → Γ [ var e / x ]C ≡ Γ
+Subst₁-lemma1 [] e x []     = refl
+Subst₁-lemma1 ((var w ∶ A)   ∷ Γ) e x (px ∷ ctx) with w ≟str x
+Subst₁-lemma1 (var w ∶ A ∷ Γ) e x (prop ∷ ctx) | yes p = contradiction (sym p) (proj₁ prop)
+Subst₁-lemma1 (var w ∶ A ∷ Γ) e x (prop ∷ ctx) | no ¬p =
+    ≡begin
+        var w ∶ A [ var e / x ] ∷ Γ [ var e / x ]C
+    ≡⟨ cong (λ term → var w ∶ term ∷ Γ [ var e / x ]C) (fresh-substitution (proj₂ prop)) ⟩
+        var w ∶ A ∷ Γ [ var e / x ]C
+    ≡⟨ cong (λ Δ → var w ∶ A ∷ Δ) (Subst₁-lemma1 Γ e x ctx) ⟩
+        var w ∶ A ∷ Γ
+    ≡∎
     where
-        start : b [ a / x ] ∶ B [ a / x ] ∈ (Δ ++ var x ∶ A ∷ Γ) [ a / x ]'
-        start = judgement-substitution-mono (Δ ++ var x ∶ A ∷ Γ) (_ ∶ _) a x Q
+        open PropEq.≡-Reasoning renaming (begin_ to ≡begin_; _∎ to _≡∎)
+Subst₁-lemma1 ((a ≣ b ∶ A)   ∷ Γ) e x (() ∷ ctx)
+Subst₁-lemma1 ((    A ∶ 𝒾 𝒰) ∷ Γ) e x (() ∷ ctx)
+Subst₁-lemma1 ((A ≣ B ∶ 𝒾 𝒰) ∷ Γ) e x (() ∷ ctx)
 
-        lemma : (Δ ++ var x ∶ A ∷ Γ) [ a / x ]' ⊆ (Δ ++ Γ) [ a / x ]'
-        lemma = begin
-                    (Δ ++ var x ∶ A ∷ Γ) [ a / x ]'
-                ≈⟨ ++-context-substitution Δ (var x ∶ A ∷ Γ) ⟩
-                    Δ [ a / x ]' ++ (var x ∶ A ∷ Γ) [ a / x ]'
-                ≤⟨ ++-left-mono (Δ [ a / x ]') (sbst-lemma2 Γ A a x P) ⟩
-                    Δ [ a / x ]' ++ Γ [ a / x ]'
-                ≈⟨ ≋-sym (++-context-substitution Δ Γ) ⟩
-                    (Δ ++ Γ) [ a / x ]'
-                ∎
-Subst₁ Γ Δ A B a b {x} (in-context P) (Vble Q) = in-context {! judgement-substitution-mono (Δ ++ var x ∶ A ∷ Γ) (_ ∶ _) a x   !}
-Subst₁ Γ Δ A B a b (in-context P) (≣-transport₁ Q Q₁) = {!   !}
-Subst₁ Γ Δ A B a b (Vble Γ-ctx) Q = {!   !}
-Subst₁ Γ Δ A B a b (≣-transport₁ Γ⊢a∶A Γ⊢A∶A) Q = {!   !}
--- infix 3 _⊢_
--- _⊢_ : Context → Judgement → Set
--- Γ ⊢ J = J ∈ Γ
+Subst₁-lemma2 : ∀ B a b x
+    → b ≡ x
+    → (var b ∶ B) [ var a / x ]J ≡ var a ∶ B [ var a / x ]
+Subst₁-lemma2 B a b x b≡x with b ≟str x
+Subst₁-lemma2 B a b x b≡x | yes p = refl
+Subst₁-lemma2 B a b x b≡x | no ¬p = contradiction b≡x ¬p
+
+Subst₁ : ∀ Γ Δ A B {a} {b} x
+    →                   Γ ⊢ a           ∶ A             -- JA
+    →  Δ ++ var x ∶ A ∷ Γ ⊢ b           ∶ B             -- JB
+    → (Δ ++ Γ) [ a / x ]C ⊢ b [ a / x ] ∶ B [ a / x ]
+Subst₁ [] Δ A B x (Vble CTX-JA A∶𝒰 a ()) (Vble CTX-JB B∶𝒰 b b∶B)
+Subst₁ (J ∷ Γ) [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) with b ≟str x
+Subst₁ (J ∷ Γ) [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble (ctx-EXT _ prop') B∶𝒰 b b∶B) | yes p =
+    Vble ctx hasType a hasVar
+    where
+        lemma : (J ∷ Γ) [ var a / x ]C ≡ J ∷ Γ
+        lemma = Subst₁-lemma1 _ a x prop'
+
+        ctx : CTX ((J ∷ Γ) [ var a / x ]C)
+        ctx = subst CTX (sym lemma) CTX-JA
+
+        hasType' : B [ var a / x ] ∶ _ 𝒰 ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C
+        hasType' = judgement-substitution-mono (var x ∶ A ∷ J ∷ Γ) (B ∶ _ 𝒰) (var a) x B∶𝒰
+
+        hasType : B [ var a / x ] ∶ _ 𝒰 ∈ (J ∷ Γ) [ var a / x ]C
+        hasType = substitution-lemma1 (J ∷ Γ) A (var a) x a∶A hasType' --
+
+        hasVar'' : (var b ∶ B) [ var a / x ]J ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C
+        hasVar'' = judgement-substitution-mono (var x ∶ A ∷ J ∷ Γ) (var b ∶ B) (var a) x b∶B
+
+        lemma2 : (var b ∶ B) [ var a / x ]J ≡ var a ∶ B [ var a / x ]
+        lemma2 = Subst₁-lemma2 B a b x p
+
+        hasVar' : var a ∶ B [ var a / x ] ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C
+        hasVar' = subst (λ w → w ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C) lemma2 hasVar''
+        -- hasVar' : var a ∶ B [ var a / x ] ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C
+        -- hasVar' = judgement-substitution-mono (var x ∶ A ∷ J ∷ Γ) {! var a ∶ B  !} (var a) x b∶B'
+        -- b ≡ x that's why we have 'var a ∶ ...'
+        hasVar : var a ∶ B [ var a / x ] ∈ (J ∷ Γ) [ var a / x ]C
+        hasVar = substitution-lemma1 (J ∷ Γ) A (var a) x a∶A hasVar'
+
+Subst₁ (J ∷ Γ) [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) | no ¬p = {!   !}
+Subst₁ (J ∷ Γ) (K ∷ Δ) A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) = {!   !}
+-- Subst₁ Γ [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble (ctx-EXT typ prop) B∶𝒰 b b∶B) | yes p
+--     -- = Vble context hasType a hasVar
+--     -- where
+--     --     context : CTX (Γ [ var a / x ]C)
+--     --     context = {!   !}
+--     --
+--     --     hasType : B [ var a / x ] ∶ _ 𝒰 ∈ Γ [ var a / x ]C
+--     --     hasType = {!   !}
+--     --
+--     --     hasVar : var a ∶ B [ var a / x ] ∈ Γ [ var a / x ]C
+--     --     hasVar = {!   !}
 --
--- data CTX : Context → Set where
---     ctx-EMP : CTX []
---     ctx-EXT : ∀ {Γ A 𝒰 x} → Γ ⊢ A ∶ 𝒰 → CTX ((x ∶ A) ∷ Γ)
+-- Subst₁ Γ [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) | no ¬p = {!   !}
+-- Subst₁ Γ (K ∷ Δ) A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) = {!   !}
 
--- data Structural : Set where
---     Vble : ∀ {Γ x A} → CTX Γ → Γ ⊢ x ∶ A → Structural
---     subst₁ : ∀ {Γ Δ a b x A B} → Γ ⊢ a ∶ A
+
+
+-- Subst₁ Γ Δ A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) with b ≟str x
+--
+--  -- b should be fresh, but it's not
+-- -- Subst₁ Γ Δ A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) | yes b≡x with (Δ ++ var x ∶ A ∷ Γ)
+-- -- Subst₁ Γ Δ A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b ())  | yes b≡x | []
+-- -- Subst₁ Γ Δ A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble (ctx-EXT {x = e} typ prop) B∶𝒰 b b∶B) | yes b≡x | .(var e ∶ _) ∷ E = {!  !}
+-- --     where
+-- --         open import Data.List.All.Properties using (Any¬→¬All)
+-- --         open import Function using (_∘_)
+-- --         open import Data.List.Any as Any
+-- --         counter : Any (¬_ ∘ CtxProp e) E
+-- --         counter = {!   !}
+-- --
+-- --         ¬prop : ¬ (All (CtxProp e) E)
+-- --         ¬prop = Any¬→¬All {!   !}
+--
+-- Subst₁ Γ [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) | yes b≡x = {!   !}
+-- Subst₁ Γ (K ∷ Δ) A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) | yes b≡x = {! CTX-JB  !}
+--
+--
+-- Subst₁ Γ Δ A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) | no b≢x = {!   !}
+
+
+
+Subst₁ Γ Δ A B x (Vble CTX-Γ U v ∈Γ) (transport-∶ Q Q₁) = {!   !}
+Subst₁ Γ Δ A B x (transport-∶ P P₁) Q = {!   !}
+-- Subst₁ Γ Δ A B .(var _) b x (Vble P Q R) (≣-transport₁ S T) = {!   !}
+-- Subst₁ Γ Δ A B a b x (≣-transport₁ P Q) S = {!   !}
+--
+-- -- Subst₁ Γ Δ A B a b {x} (in-context P) (in-context Q) = in-context (lemma start)
+-- --     where
+-- --         start : b [ a / x ] ∶ B [ a / x ] ∈ (Δ ++ var x ∶ A ∷ Γ) [ a / x ]C
+-- --         start = judgement-substitution-mono (Δ ++ var x ∶ A ∷ Γ) (_ ∶ _) a x Q
+-- --
+-- --         lemma : (Δ ++ var x ∶ A ∷ Γ) [ a / x ]C ⊆ (Δ ++ Γ) [ a / x ]C
+-- --         lemma = begin
+-- --                     (Δ ++ var x ∶ A ∷ Γ) [ a / x ]C
+-- --                 ≈⟨ ++-context-substitution Δ (var x ∶ A ∷ Γ) ⟩
+-- --                     Δ [ a / x ]C ++ (var x ∶ A ∷ Γ) [ a / x ]C
+-- --                 ≤⟨ ++-left-mono (Δ [ a / x ]C) (sbst-lemma2 Γ A a x P) ⟩
+-- --                     Δ [ a / x ]C ++ Γ [ a / x ]C
+-- --                 ≈⟨ ≋-sym (++-context-substitution Δ Γ) ⟩
+-- --                     (Δ ++ Γ) [ a / x ]C
+-- --                 ∎
+-- -- Subst₁ Γ Δ A B a b {x} (in-context P) (Vble Q) = in-context {! judgement-substitution-mono (Δ ++ var x ∶ A ∷ Γ) (_ ∶ _) a x   !}
+-- -- Subst₁ Γ Δ A B a b (in-context P) (≣-transport₁ Q Q₁) = {!   !}
+-- -- Subst₁ Γ Δ A B a b (Vble Γ-ctx) Q = {!   !}
+-- -- Subst₁ Γ Δ A B a b (≣-transport₁ Γ⊢a∶A Γ⊢A∶A) Q = {!   !}
+-- -- infix 3 _⊢_
+-- -- _⊢_ : Context → Judgement → Set
+-- -- Γ ⊢ J = J ∈ Γ
+-- --
+-- -- data CTX : Context → Set where
+-- --     ctx-EMP : CTX []
+-- --     ctx-EXT : ∀ {Γ A 𝒰 x} → Γ ⊢ A ∶ 𝒰 → CTX ((x ∶ A) ∷ Γ)
+--
+-- -- data Structural : Set where
+-- --     Vble : ∀ {Γ x A} → CTX Γ → Γ ⊢ x ∶ A → Structural
+-- --     subst₁ : ∀ {Γ Δ a b x A B} → Γ ⊢ a ∶ A

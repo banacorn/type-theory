@@ -9,7 +9,7 @@ module Membership.Core {c ℓ}
 
 open import Data.Product using (_×_; _,_; proj₁; proj₂)
 
-open IsEquivalence isEquivalence public
+open IsEquivalence isEquivalence
 
 -- Membership
 infix 3 _∈_
