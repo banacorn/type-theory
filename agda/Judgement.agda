@@ -128,8 +128,11 @@ mutual
     OfHasType (    A ∶ 𝒾 𝒰) = ⊥
     OfHasType (A ≣ B ∶ 𝒾 𝒰) = ⊥
 
-    IsCTX : Variable → Judgement → Set
-    IsCTX variable judgement = OfHasType judgement × variable FreshInJudgement judgement
+    record IsCTX (v : Variable) (j : Judgement) : Set where
+        constructor ctx
+        field
+            ofHasType : OfHasType j
+            fresh : v FreshInJudgement j
 
     data CTX : List Judgement → Set where
         ctx-EMP : CTX []
@@ -197,12 +200,29 @@ mutual
             → Γ ⊢ A ∶ suc 𝒾 𝒰
 --
 
-Subst₁-empty-context : ∀ Γ Δ A {a x}
-    → (Δ ++ Γ) [ var a / x ]C ≡ []
-    → var a ∶ A ∈ Γ
-    → ⊥
-Subst₁-empty-context []      Δ A empty ()
-Subst₁-empty-context (J ∷ Γ) Δ A empty a∶A = contradiction empty (must-not-be-empty Γ Δ J)
+All-CTX-fresh : ∀ Γ Δ {x v A}
+    → All (IsCTX v) (Δ ++ var x ∶ A ∷ Γ)
+    → v ≢ x
+All-CTX-fresh Γ [] (ctx ofHasType fresh ∷ allCTX) = proj₁ fresh
+All-CTX-fresh Γ (K ∷ Δ) (px ∷ allCTX) = All-CTX-fresh Γ Δ allCTX
+
+-- context-substitution-OfHasType : ∀ Γ J {e x} → (J ∷ Γ) [ var e / x ]C →
+
+record ObserveContext {A : Term} {a x : Variable} (Γ Δ : Context) (a∶A : var a ∶ A ∈ Γ) : Set where
+    constructor observation
+    field
+        v : Variable
+        T : Term
+        E : Context
+        eq : (Δ ++ Γ) [ var a / x ]C ≡ var v ∶ T ∷ E
+
+observe : {A : Term} {a x : Variable}
+    → (Γ Δ : Context)
+    → (a∶A : var a ∶ A ∈ Γ)
+    → (isCTX : CTX (Δ ++ var x ∶ A ∷ Γ))
+    → ObserveContext Γ Δ a∶A
+observe {A} {a} {x} Γ Δ a∶A isCTX with (Δ ++ Γ) [ var a / x ]C | inspect (λ C → C [ var a / x ]C) (Δ ++ Γ)
+observe {A} {a} {x} Γ Δ a∶A isCTX | [] | inspect[ eq ] = contradiction a∶A (Subst₁-empty-context Γ Δ A eq)
     where
         must-not-be-empty : ∀ Γ Δ J {a x} → (Δ ++ J ∷ Γ) [ var a / x ]C ≢ []
         must-not-be-empty []      []      J ()
@@ -210,14 +230,90 @@ Subst₁-empty-context (J ∷ Γ) Δ A empty a∶A = contradiction empty (must-n
         must-not-be-empty (_ ∷ Γ) []      J ()
         must-not-be-empty (_ ∷ Γ) (_ ∷ Δ) J ()
 
+        Subst₁-empty-context : ∀ Γ Δ A {a x}
+            → (Δ ++ Γ) [ var a / x ]C ≡ []
+            → var a ∶ A ∈ Γ
+            → ⊥
+        Subst₁-empty-context []      Δ A empty ()
+        Subst₁-empty-context (J ∷ Γ) Δ A empty a∶A = contradiction empty (must-not-be-empty Γ Δ J)
+observe {A} {a} {x} Γ Δ  a∶A isCTX | var v ∶ T ∷ E | inspect[ eq ] = observation v T E eq
+observe {A} {a} {x} Γ [] a∶A (ctx-EXT hasUniv allCTX) | _ ≣ _ ∶ _ ∷ E | inspect[ eq ]
+    = contradiction eq (lemma Γ allCTX)
+    where
+        lemma : ∀ Γ {A E a b e x}
+            → All (IsCTX x) Γ
+            → Γ [ var e / x ]C ≢ a ≣ b ∶ A ∷ E
+        lemma []      allCTX = λ ()
+        lemma (a ∶ A ∷ Γ) allCTX = λ ()
+        lemma (a ≣ b ∶ A ∷ Γ) (ctx () fresh ∷ allCTX)
+        lemma (A ∶ 𝒾 𝒰 ∷ Γ) allCTX = λ ()
+        lemma (A ≣ B ∶ 𝒾 𝒰 ∷ Γ) allCTX = λ ()
+observe {A} {a} {x} Γ (_ ∷ Δ) a∶A (ctx-EXT {x = v} hasUniv allCTX) | _ ≣ _ ∶ _ ∷ E | inspect[ eq ] with x ≟str v
+observe {A} {a} {x} Γ (_ ∷ Δ) a∶A (ctx-EXT hasUniv allCTX) | _ ≣ _ ∶ _ ∷ E | inspect[ eq ] | yes p
+    = contradiction (sym p) (All-CTX-fresh Γ Δ allCTX)
+observe {A} {a} {x} Γ (_ ∷ Δ) a∶A (ctx-EXT hasUniv allCTX) | _ ≣ _ ∶ _ ∷ E | inspect[ () ] | no ¬p
+observe {A} {a} {x} Γ []      a∶A (ctx-EXT hasUniv allCTX) | _ ∶ _ 𝒰 ∷ E | inspect[ eq ]
+    = contradiction eq (lemma Γ allCTX)
+    where
+        lemma : ∀ Γ {A E 𝒾 e x}
+            → All (IsCTX x) Γ
+            → Γ [ var e / x ]C ≢ A ∶ 𝒾 𝒰 ∷ E
+        lemma []                allCTX = λ ()
+        lemma (    a ∶ A   ∷ Γ) allCTX = λ ()
+        lemma (a ≣ b ∶ A   ∷ Γ) allCTX = λ ()
+        lemma (    A ∶ 𝒾 𝒰 ∷ Γ) (ctx () fresh ∷ allCTX)
+        lemma (A ≣ B ∶ 𝒾 𝒰 ∷ Γ) allCTX = λ ()
+observe {A} {a} {x} Γ (_ ∷ Δ) a∶A (ctx-EXT {x = v} hasUniv allCTX) | _ ∶ _ 𝒰 ∷ E | inspect[ eq ] with x ≟str v
+observe {A} {a} {x} Γ (_ ∷ Δ) a∶A (ctx-EXT {x = v} hasUniv allCTX) | _ ∶ _ 𝒰 ∷ E | inspect[ eq ] | yes p
+    = contradiction (sym p) (All-CTX-fresh Γ Δ allCTX)
+observe {A} {a} {x} Γ (_ ∷ Δ) a∶A (ctx-EXT {x = v} hasUniv allCTX) | _ ∶ _ 𝒰 ∷ E | inspect[ eq ] | no ¬p
+    = contradiction eq (λ ())
+observe {A} {a} {x} Γ [] a∶A (ctx-EXT hasUniv allCTX) | _ ≣ _ ∶ _ 𝒰 ∷ E | inspect[ eq ]
+    = contradiction eq (lemma Γ allCTX)
+    where
+        lemma : ∀ Γ {E 𝒾 A B e x}
+            → All (IsCTX x) Γ
+            → Γ [ var e / x ]C ≢ A ≣ B ∶ 𝒾 𝒰 ∷ E
+        lemma []                allCTX = λ ()
+        lemma (    a ∶ A   ∷ Γ) allCTX = λ ()
+        lemma (a ≣ b ∶ A   ∷ Γ) allCTX = λ ()
+        lemma (    A ∶ 𝒾 𝒰 ∷ Γ) allCTX = λ ()
+        lemma (A ≣ B ∶ 𝒾 𝒰 ∷ Γ) (ctx () fresh ∷ allCTX)
+observe {A} {a} {x} Γ (_ ∷ Δ) a∶A (ctx-EXT {x = v} hasUniv allCTX) | _ ≣ _ ∶ _ 𝒰 ∷ E | inspect[ eq ] with x ≟str v
+observe {A} {a} {x} Γ (_ ∷ Δ) a∶A (ctx-EXT {x = v} hasUniv allCTX) | _ ≣ _ ∶ _ 𝒰 ∷ E | inspect[ eq ] | yes p
+    = contradiction (sym p) (All-CTX-fresh Γ Δ allCTX)
+observe {A} {a} {x} Γ (_ ∷ Δ) a∶A (ctx-EXT {x = v} hasUniv allCTX) | _ ≣ _ ∶ _ 𝒰 ∷ E | inspect[ eq ] | no ¬p
+    = contradiction eq (λ ())
 
 Subst₁ : ∀ Γ Δ A B {a} {b} x
     →                   Γ ⊢ a           ∶ A             -- JA
     →  Δ ++ var x ∶ A ∷ Γ ⊢ b           ∶ B             -- JB
     → (Δ ++ Γ) [ a / x ]C ⊢ b [ a / x ] ∶ B [ a / x ]
-Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) Q with (Δ ++ Γ) [ var a / x ]C | inspect (λ C → C [ var a / x ]C) (Δ ++ Γ)
-Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) Q | [] | inspect[ eq ] = contradiction a∶A (Subst₁-empty-context Γ Δ A eq)
-Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) Q | J ∷ E | eq = {!   !}
+Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) with observe Γ Δ a∶A CTX-B
+Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | observation v T E eq with x ≟str b
+Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | observation v T E eq | yes p =
+    subst (λ C → C ⊢ var a ∶ B [ var a / x ]) (sym eq) goal
+    where
+        -- (Δ ++ Γ) [ var a / x ]C ≡     var v ∶ T ∷ E
+
+        -- A∶𝒰 : (A ∶ .𝒾 𝒰) ∈ Γ
+        -- B∶𝒰 : (B ∶ .𝒾 𝒰) ∈ Δ ++ var x ∶ A ∷ Γ
+
+        E⊢T∶𝒰 : E ⊢ T ∶ _ 𝒰
+        E⊢T∶𝒰 = {!   !}
+
+        goal : var v ∶ T ∷ E ⊢ var a ∶ B [ var a / x ]
+        goal = Vble (ctx-EXT E⊢T∶𝒰 {!   !}) {!   !} a {! eq  !}
+
+    -- Vble {!   !} {!   !} {!   !} {!   !}
+Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | observation v T E eq | no ¬p = {!   !}
+-- Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) Q with (Δ ++ Γ) [ var a / x ]C | inspect (λ C → C [ var a / x ]C) (Δ ++ Γ)
+-- Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) Q | [] | inspect[ eq ] = contradiction a∶A (Subst₁-empty-context Γ Δ A eq)
+-- Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | a₁ ∶ A₁ ∷ E | inspect[ eq ] = {! a∶A  !}
+-- Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | a₁ ≣ b₁ ∶ A₁ ∷ E | inspect[ eq ] = {!   !}
+-- Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | A₁ ∶ 𝒾 𝒰 ∷ E | inspect[ eq ] = {!   !}
+-- Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | A₁ ≣ B₁ ∶ 𝒾 𝒰 ∷ E | inspect[ eq ] = {!   !}
+Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (transport-∶ Q Q₁) = {!   !}
 Subst₁ Γ Δ A B x (transport-∶ P P₁) Q = {!   !}
 
 
