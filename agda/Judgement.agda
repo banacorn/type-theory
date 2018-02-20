@@ -54,6 +54,28 @@ variable FreshInJudgement (    a ∶ A)   = variable FreshIn a × variable Fresh
 variable FreshInJudgement (a ≣ b ∶ A)   = variable FreshIn a × variable FreshIn b × variable FreshIn A
 variable FreshInJudgement (    A ∶ 𝒾 𝒰) = variable FreshIn A
 variable FreshInJudgement (A ≣ B ∶ 𝒾 𝒰) = variable FreshIn A × variable FreshIn B
+
+judgement-fresh-substitution : ∀ {judgement variable expr}
+    → variable FreshInJudgement judgement
+    → judgement [ expr / variable ]J ≡ judgement
+judgement-fresh-substitution {      a ∶ A} (a-fresh , A-fresh) = cong₂ _∶_ (fresh-substitution a-fresh) (fresh-substitution A-fresh)
+judgement-fresh-substitution {a ≣ b ∶   A} (a-fresh , b-fresh , A-fresh) =
+    ≡begin
+        a [ _ / _ ] ≣ b [ _ / _ ] ∶ A [ _ / _ ]
+    ≡⟨ cong (λ x → a [ _ / _ ] ≣ b [ _ / _ ] ∶ x) (fresh-substitution A-fresh) ⟩
+        a [ _ / _ ] ≣ b [ _ / _ ] ∶ A
+    ≡⟨ cong₂ (λ x y → x ≣ y ∶ A) (fresh-substitution a-fresh) (fresh-substitution b-fresh) ⟩
+        a ≣ b ∶ A
+    ≡∎
+    where
+        open PropEq.≡-Reasoning renaming (begin_ to ≡begin_; _∎ to _≡∎)
+judgement-fresh-substitution {    A ∶ 𝒾 𝒰} A-fresh = cong (λ x → x ∶ 𝒾 𝒰) (fresh-substitution A-fresh)
+judgement-fresh-substitution {A ≣ B ∶ 𝒾 𝒰} (A-fresh , B-fresh) = cong₂ (λ x y → x ≣ y ∶ 𝒾 𝒰) (fresh-substitution A-fresh) (fresh-substitution B-fresh)
+-- fresh-substitution : ∀ {term variable expr}
+-- fresh-substitution {var x} {variable} fresh with variable ≟str x
+-- fresh-substitution {var x} {variable} fresh | yes p = contradiction p fresh
+-- fresh-substitution {var x} {variable} fresh | no ¬p = refl
+
     -- open import Membership Judgement
 
 -- ++-context-substitution : ∀ {e x} Γ Δ → (Γ ++ Δ) [ e / x ]C ≋ Γ [ e / x ]C ++ Δ [ e / x ]C
@@ -215,6 +237,7 @@ record ObserveContext {A : Term} {a x : Variable} (Γ Δ : Context) (a∶A : var
         T : Term
         E : Context
         eq : (Δ ++ Γ) [ var a / x ]C ≡ var v ∶ T ∷ E
+        -- fresh : v ≢
 
 observe : {A : Term} {a x : Variable}
     → (Γ Δ : Context)
@@ -237,6 +260,12 @@ observe {A} {a} {x} Γ Δ a∶A isCTX | [] | inspect[ eq ] = contradiction a∶A
         Subst₁-empty-context []      Δ A empty ()
         Subst₁-empty-context (J ∷ Γ) Δ A empty a∶A = contradiction empty (must-not-be-empty Γ Δ J)
 observe {A} {a} {x} Γ Δ  a∶A isCTX | var v ∶ T ∷ E | inspect[ eq ] = observation v T E eq
+-- observe {A} {a} {x} Γ [] a∶A (ctx-EXT hasUniv allCTX) | var v ∶ T ∷ E | inspect[ eq ] = {! eq   !}
+--     where
+--         allCTX-substituted : All (IsCTX x) (var v ∶ T ∷ E)
+--         allCTX-substituted = subst (All (IsCTX x)) {!   !} {!   !}
+--         -- All-CTX-fresh (var v ∶ T ∷ E) []
+-- observe {A} {a} {x} Γ (x₁ ∷ Δ) a∶A isCTX | var v ∶ T ∷ E | inspect[ eq ] = {!   !}
 observe {A} {a} {x} Γ [] a∶A (ctx-EXT hasUniv allCTX) | _ ≣ _ ∶ _ ∷ E | inspect[ eq ]
     = contradiction eq (lemma Γ allCTX)
     where
@@ -285,25 +314,67 @@ observe {A} {a} {x} Γ (_ ∷ Δ) a∶A (ctx-EXT {x = v} hasUniv allCTX) | _ ≣
 observe {A} {a} {x} Γ (_ ∷ Δ) a∶A (ctx-EXT {x = v} hasUniv allCTX) | _ ≣ _ ∶ _ 𝒰 ∷ E | inspect[ eq ] | no ¬p
     = contradiction eq (λ ())
 
+-- Subst₁-lemma-1 : ∀ Γ Δ {A B b x}
+--     → (b∶B : var b ∶ B ∈ Δ ++ var x ∶ A ∷ Γ)
+--     → x ≡ b
+--     → Δ ≡ []
+-- Subst₁-lemma-1 Γ []      b∶B eq = refl
+-- Subst₁-lemma-1 Γ (K ∷ Δ) b∶B eq = {! b∶B  !}
+CTX-fresh-substitution : ∀ Γ {variable expr}
+    → All (IsCTX variable) Γ
+    → Γ [ expr / variable ]C ≡ Γ
+CTX-fresh-substitution []      [] = refl
+CTX-fresh-substitution (J ∷ Γ) (ctx ofHasType fresh ∷ allCTX)
+    = cong₂ _∷_
+        (judgement-fresh-substitution fresh)
+        (CTX-fresh-substitution Γ allCTX)
+
 Subst₁ : ∀ Γ Δ A B {a} {b} x
     →                   Γ ⊢ a           ∶ A             -- JA
     →  Δ ++ var x ∶ A ∷ Γ ⊢ b           ∶ B             -- JB
     → (Δ ++ Γ) [ a / x ]C ⊢ b [ a / x ] ∶ B [ a / x ]
 Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) with observe Γ Δ a∶A CTX-B
 Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | observation v T E eq with x ≟str b
-Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | observation v T E eq | yes p =
-    subst (λ C → C ⊢ var a ∶ B [ var a / x ]) (sym eq) goal
-    where
-        -- (Δ ++ Γ) [ var a / x ]C ≡     var v ∶ T ∷ E
+Subst₁ Γ [] A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble (ctx-EXT hasUniv allCTX) B∶𝒰 b b∶B) | observation v T E eq | yes p
+    = Vble
+        (subst CTX (sym (CTX-fresh-substitution Γ allCTX)) CTX-A)
+        ((substitution-lemma1 Γ A (var a) x a∶A) (judgement-substitution-mono (_ ∶ _ ∷ Γ) (_ ∶ _ 𝒰) (var a) x B∶𝒰))
+        a
+        {! judgement-substitution-mono Γ ? (var a) x a∶A !}
+        where
+            hasType : var a ∶ B [ var a / x ] ∈ Γ [ var a / x ]C
+            hasType = {! b∶B  !}
+        -- B [ var a / x ] ∶ _ 𝒰
 
-        -- A∶𝒰 : (A ∶ .𝒾 𝒰) ∈ Γ
-        -- B∶𝒰 : (B ∶ .𝒾 𝒰) ∈ Δ ++ var x ∶ A ∷ Γ
 
-        E⊢T∶𝒰 : E ⊢ T ∶ _ 𝒰
-        E⊢T∶𝒰 = {!   !}
+-- substitution-lemma1
+    -- where
+    --     ctx : Γ [ var a / x ]C
+    --     ctx = ?
 
-        goal : var v ∶ T ∷ E ⊢ var a ∶ B [ var a / x ]
-        goal = Vble (ctx-EXT E⊢T∶𝒰 {!   !}) {!   !} a {! eq  !}
+-- goal : Γ [ var a / x ]C ⊢ var a ∶ B [ var a / x ]
+-- allCTX : All (IsCTX x) Γ
+
+Subst₁ Γ (K ∷ Δ) A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | observation v T E eq | yes p = {!   !}
+-- → All (IsCTX v) (Δ ++ var x ∶ A ∷ Γ)
+-- → v ≢ x
+
+
+    -- subst (λ C → C ⊢ var a ∶ B [ var a / x ]) (sym eq) goal
+    -- where
+    --     -- (Δ ++ Γ) [ var a / x ]C ≡     var v ∶ T ∷ E
+    --
+    --     -- A∶𝒰 : (A ∶ .𝒾 𝒰) ∈ Γ
+    --     -- B∶𝒰 : (B ∶ .𝒾 𝒰) ∈ Δ ++ var x ∶ A ∷ Γ
+    --
+    --     E⊢T∶𝒰 : E ⊢ T ∶ _ 𝒰
+    --     E⊢T∶𝒰 = {!   !}
+    --
+    --     all-is-CTX : All (IsCTX v) E
+    --     all-is-CTX = {!  CTX-B  !}
+    --
+    --     goal : var v ∶ T ∷ E ⊢ var a ∶ B [ var a / x ]
+    --     goal = Vble (ctx-EXT E⊢T∶𝒰 {!   !}) {! eq  !} a {! CTX-B  !}
 
     -- Vble {!   !} {!   !} {!   !} {!   !}
 Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | observation v T E eq | no ¬p = {!   !}
@@ -352,7 +423,7 @@ Subst₁ Γ Δ A B x (transport-∶ P P₁) Q = {!   !}
 -- Subst₁-lemma3 B a b x b≢x | yes p = contradiction p b≢x
 -- Subst₁-lemma3 B a b x b≢x | no ¬p = refl
 --
--- -- ctx-EXT : ∀ {𝒾 Γ A x}
+-- -- ctx-EXT : ∀ {𝒾 Γ A x}≡
 -- --     → Γ ⊢ A ∶ 𝒾 𝒰
 -- --     → All (CtxProp x) Γ
 -- --     → CTX ((var x ∶ A) ∷ Γ)
