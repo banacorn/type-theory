@@ -134,24 +134,41 @@ nub {[]}     ()   x∈y∷xs
 nub {x ∷ xs} y∈xs (here refl) = y∈xs
 nub {x ∷ xs} y∈xs (there p)   = p
 
-C-subst-nub : ∀ Γ {A a x}
-    → a ∶ A ∈ Γ
-    → (var x ∶ A ∷ Γ) [ a / x ]C ⊆ Γ [ a / x ]C
-C-subst-nub []                  ()
-C-subst-nub (J ∷ Γ) {A} {a} {x} P =
-    begin
-        (var x ∶ A ∷ J ∷ Γ) [ a / x ]C
-    ≡⟨ refl ⟩
-        (var x ∶ A) [ a / x ]J ∷ (J ∷ Γ) [ a / x ]C
-    ≡⟨ cong (λ p → p ∷ (J ∷ Γ) [ a / x ]C) (a∶A-subst A a x) ⟩
-        a ∶ A [ a / x ] ∷ (J ∷ Γ) [ a / x ]C
-     ≡⟨ cong (λ p → p ∶ A [ a / x ] ∷ (J ∷ Γ) [ a / x ]C) (self-subst a x) ⟩
-        (a ∶ A ∷ J ∷ Γ) [ a / x ]C
-    ⊆⟨ C-subst-mono (a ∶ A ∷ J ∷ Γ) (J ∷ Γ) (nub P) ⟩
-        (J ∷ Γ) [ a / x ]C
-    ∎
-    where open ⊆-Reasoning
+C-subst-++ : ∀ {e x} Γ Δ
+    → (Γ ++ Δ) [ e / x ]C ≡ Γ [ e / x ]C ++ Δ [ e / x ]C
+C-subst-++ {e} {x} Γ Δ = map-++-commute (λ w → w [ e / x ]J) Γ Δ
+    where
+        open import Data.List.Properties using (map-++-commute)
 
+C-subst-nub : ∀ Γ Δ {A a x}
+    → a ∶ A ∈ Γ
+    → (Δ ++ var x ∶ A ∷ Γ) [ a / x ]C ⊆ (Δ ++ Γ) [ a / x ]C
+C-subst-nub []      Δ             ()
+C-subst-nub (J ∷ Γ) Δ {A} {a} {x} P =
+    begin
+        (Δ ++ var x ∶ A ∷ J ∷ Γ) [ a / x ]C
+    ≡⟨ C-subst-++ Δ (var x ∶ A ∷ J ∷ Γ) ⟩
+        Δ [ a / x ]C ++ (var x ∶ A ∷ J ∷ Γ) [ a / x ]C
+    ⊆⟨ ++-cong {xs₁ = Δ [ a / x ]C} (λ w → w) (
+        begin
+            (var x ∶ A ∷ J ∷ Γ) [ a / x ]C
+        ≡⟨ refl ⟩
+            (var x ∶ A) [ a / x ]J ∷ (J ∷ Γ) [ a / x ]C
+        ≡⟨ cong (λ p → p ∷ (J ∷ Γ) [ a / x ]C) (a∶A-subst A a x) ⟩
+            a ∶ A [ a / x ] ∷ (J ∷ Γ) [ a / x ]C
+         ≡⟨ cong (λ p → p ∶ A [ a / x ] ∷ (J ∷ Γ) [ a / x ]C) (self-subst a x) ⟩
+            (a ∶ A ∷ J ∷ Γ) [ a / x ]C
+        ⊆⟨ C-subst-mono (a ∶ A ∷ J ∷ Γ) (J ∷ Γ) (nub P) ⟩
+            (J ∷ Γ) [ a / x ]C
+        ∎
+    )⟩
+        Δ [ a / x ]C ++ (J ∷ Γ) [ a / x ]C
+    ≡⟨ sym (C-subst-++ Δ (J ∷ Γ)) ⟩
+        (Δ ++ J ∷ Γ) [ a / x ]C
+    ∎
+    where
+        open ⊆-Reasoning
+        open import Data.List.Any.BagAndSetEquality using (++-cong)
 -- module EquationalReasoning where
 
   -- _≡⟨_⟩_ : ∀ {k ℓ z} (X : Set ℓ) {Y : Set ℓ} {Z : Set z} →
@@ -170,7 +187,3 @@ C-subst-nub (J ∷ Γ) {A} {a} {x} P =
 --         open import Function.Related
 --         open EquationalReasoning
 -- C-subst-mono
--- ++-context-substitution : ∀ {e x} Γ Δ → (Γ ++ Δ) [ e / x ]C ≋ Γ [ e / x ]C ++ Δ [ e / x ]C
--- ++-context-substitution {e} {x} Γ Δ = ≡→≋ (map-++-commute (λ w → w [ e / x ]J) Γ Δ)
---     where
---         open import Data.List.Properties using (map-++-commute)
