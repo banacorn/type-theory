@@ -95,7 +95,12 @@ mutual
             → Γ ⊢ A ∶     𝒾 𝒰
             ------------------------------
             → Γ ⊢ A ∶ suc 𝒾 𝒰
---
+
+-- ???
+-- CTX-wellformed : ∀ Γ a A → Γ ⊢ a ∶ A → CTX Γ
+-- CTX-wellformed []      a A P = ctx-EMP
+-- CTX-wellformed (J ∷ Γ) .(var x) A (Vble isCTX A∶𝒰 x x∶A) = isCTX
+-- CTX-wellformed (J ∷ Γ) a A (transport-∶ P ())
 
 CTX-fresh : ∀ Γ Δ {x v A}
     → All (IsCTX v) (Δ ++ var x ∶ A ∷ Γ)
@@ -112,7 +117,13 @@ CTX-subst-fresh (J ∷ Γ) (ctx ofHasType fresh ∷ allCTX)
         (J-subst-fresh fresh)
         (CTX-subst-fresh Γ allCTX)
 
--- context-substitution-OfHasType : ∀ Γ J {e x} → (J ∷ Γ) [ var e / x ]C →
+-- -- All (IsCTX k) (Δ ++ var x ∶ A ∷ Γ)
+-- CTX-subst : ∀ Γ a variable {A expr}
+--     → a ≢ variable
+--     → CTX ((var a ∶ A ∷ Γ) [ expr / variable ]C) ≡ CTX (var a ∶ A ∷ Γ)
+-- CTX-subst Γ a variable P with variable ≟str a
+-- CTX-subst Γ a variable P | yes p = contradiction (sym p) P
+-- CTX-subst Γ a variable P | no ¬p = cong CTX {!   !}
 
 record ObserveContext {A : Term} {a : Variable} (Γ Δ : Context) (x : Variable) (a∶A : var a ∶ A ∈ Γ) : Set where
     constructor observation
@@ -145,30 +156,7 @@ observe {A} {a} {x} Γ Δ a∶A isCTX | [] | inspect[ eq ] = contradiction a∶A
         Subst₁-empty-context []      Δ A empty ()
         Subst₁-empty-context (J ∷ Γ) Δ A empty a∶A = contradiction empty (must-not-be-empty Γ Δ J)
 observe {A} {a} {x} [] [] a∶A (ctx-EXT hasUniv allCTX) | var v ∶ T ∷ E | inspect[ () ]
-observe {A} {a} {x} (J ∷ Γ) [] a∶A (ctx-EXT hasUniv allCTX) | var v ∶ T ∷ E | inspect[ eq ]
-    = observation v T E eq
-    -- observation v T E eq {! allCTX  !}
-    where
-        prop : (J ∷ Γ) [ var a / x ]C ≡ J ∷ Γ
-        prop = CTX-subst-fresh (J ∷ Γ) allCTX
-
-        prop2 : J ∷ Γ ≡ var v ∶ T ∷ E
-        prop2 = trans (sym prop) eq
-
-        allCTX' : All (IsCTX x) (var v ∶ T ∷ E)
-        allCTX' = subst (All (IsCTX x)) prop2 allCTX
-
-        -- allCTX : All (IsCTX x) Γ
-        -- allCTX : All (IsCTX x) (var v ∶ T ∷ E)
-        fresh : x ≢ v
-        fresh = CTX-fresh E [] allCTX'
-
-        -- CTX-fresh : ∀ Γ Δ {x v A}
-        --     → All (IsCTX x) (Δ ++ var v ∶ A ∷ Γ)
-        --     → x ≢ v
-
-
-    -- observation v T E eq {! eq  !}
+observe {A} {a} {x} (J ∷ Γ) [] a∶A (ctx-EXT hasUniv allCTX) | var v ∶ T ∷ E | inspect[ eq ] = observation v T E eq
 observe {A} {a} {x} Γ (K ∷ Δ) a∶A isCTX | var v ∶ T ∷ E | inspect[ eq ] = observation v T E eq
 --  observation v T E eq {! isCTX  !}
 -- observe {A} {a} {x} Γ [] a∶A (ctx-EXT hasUniv allCTX) | var v ∶ T ∷ E | inspect[ eq ] = {! eq   !}
@@ -225,73 +213,140 @@ observe {A} {a} {x} Γ (_ ∷ Δ) a∶A (ctx-EXT {x = v} hasUniv allCTX) | _ ≣
 observe {A} {a} {x} Γ (_ ∷ Δ) a∶A (ctx-EXT {x = v} hasUniv allCTX) | _ ≣ _ ∶ _ 𝒰 ∷ E | inspect[ eq ] | no ¬p
     = contradiction eq (λ ())
 
+isCTX-lemma : ∀ Γ Δ A a x
+    → CTX Γ
+    → CTX (Δ ++ var x ∶ A ∷ Γ)
+    → var a ∶ A ∈ Γ
+    → CTX ((Δ ++ Γ) [ var a / x ]C)
+isCTX-lemma Γ [] A a x CTX-A (ctx-EXT hasUniv allCTX) a∶A
+    = subst CTX (PropEq.sym (CTX-subst-fresh Γ allCTX)) CTX-A
+isCTX-lemma Γ (var k ∶ K ∷ Δ) A a x CTX-A (ctx-EXT hasUniv allCTX) a∶A with x ≟str k
+isCTX-lemma Γ (var k ∶ K ∷ Δ) A a x CTX-A (ctx-EXT hasUniv allCTX) a∶A | yes p
+    = contradiction (sym p) (CTX-fresh Γ Δ allCTX)
+isCTX-lemma Γ (var k ∶ K ∷ Δ) A a x CTX-A (ctx-EXT hasUniv allCTX) a∶A | no ¬p
+    = ctx-EXT univ type
+    where
+        open import Function.Related
+        open EquationalReasoning
+
+        univ : (Δ ++ Γ) [ var a / x ]C ⊢ K [ var a / x ] ∶ _ 𝒰
+        univ = (
+                Δ ++ (var x ∶ A) ∷ Γ ⊢ K ∶ _ 𝒰
+            ∼⟨ {!   !} ⟩
+                {! a∶A  !}
+            ∼⟨ {!   !} ⟩
+                {!   !}
+            ∼⟨ {!   !} ⟩
+                {!   !}
+            ∼⟨ {!   !} ⟩
+                ((Δ ++ Γ) [ var a / x ]C ⊢ K [ var a / x ] ∶ _ 𝒰)
+            ∎) hasUniv
+        type : All (IsCTX k) ((Δ ++ Γ) [ var a / x ]C)
+        type = {! allCTX  !}
+
+        -- (Δ ++ var x ∶ A ∷ Γ) ≡ ((Δ ++ Γ) [ var a / x ]C)
+
+-- isCTX-lemma Γ (var k ∶ K ∷ []) A a x CTX-A (ctx-EXT hasUniv (ctx ofHasType fresh ∷ allCTX)) a∶A | no ¬p
+--     = ctx-EXT univ type
+--     where
+--         open import Function.Related
+--         open EquationalReasoning
+--
+--         univ : Γ [ var a / x ]C ⊢ K [ var a / x ] ∶ _ 𝒰
+--         univ = (
+--                 (var x ∶ A) ∷ Γ ⊢ K ∶ _ 𝒰
+--             ∼⟨ {!   !} ⟩
+--                 {! a∶A  !}
+--             ∼⟨ {!   !} ⟩
+--                 {!   !}
+--             ∼⟨ {!   !} ⟩
+--                 {!   !}
+--             ∼⟨ {!   !} ⟩
+--                 (Γ [ var a / x ]C ⊢ K [ var a / x ] ∶ _ 𝒰)
+--             ∎) hasUniv
+--         type : All (IsCTX k) (Γ [ var a / x ]C)
+--         type = {! allCTX  !}
+--     -- CTX-subst-fresh
+-- isCTX-lemma Γ (var k ∶ K ∷ L ∷ Δ) A a x CTX-A (ctx-EXT hasUniv (ctx ofHasType fresh ∷ allCTX)) a∶A | no ¬p
+--     = ctx-EXT {!   !} {!   !}
+    -- = subst CTX eq (ctx-EXT hasUniv allCTX)
+    -- -- -- allCTX : All (IsCTX k) (Δ ++ var x ∶ A ∷ Γ)
+    -- --
+    -- --
+    -- where
+    --     eq : var k ∶ K ∷ Δ ++ var x ∶ A ∷ Γ ≡ (var k ∶ K [ var a / x ]) ∷ (Δ ++ Γ) [ var a / x ]C
+    --     eq = {!   !}
+
 Subst₁ : ∀ Γ Δ A B {a} {b} x
     →                   Γ ⊢ a           ∶ A             -- JA
     →  Δ ++ var x ∶ A ∷ Γ ⊢ b           ∶ B             -- JB
     → (Δ ++ Γ) [ a / x ]C ⊢ b [ a / x ] ∶ B [ a / x ]
 Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) with observe Γ Δ a∶A CTX-B
 Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | observation v T E eq with x ≟str b
-Subst₁ Γ [] A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble (ctx-EXT hasUniv allCTX) B∶𝒰 b b∶B) | observation v T E eq | yes p
-    = Vble isCTX' univ a type
-        where
-            open import Function.Related
-            open EquationalReasoning
-
-            isCTX' : CTX (Γ [ var a / x ]C)
-            isCTX' = subst CTX (PropEq.sym (CTX-subst-fresh Γ allCTX)) CTX-A
-
-            univ : B [ var a / x ] ∶ _ 𝒰 ∈ Γ [ var a / x ]C
-            univ = (
-                    B ∶ _ 𝒰 ∈ var x ∶ A ∷ Γ
-                ∼⟨ J-subst-mono (var x ∶ A ∷ Γ) (B ∶ _ 𝒰) ⟩
-                    (B ∶ _ 𝒰) [ var a / x ]J ∈ (var x ∶ A ∷ Γ) [ var a / x ]C
-                ∼⟨ C-subst-nub Γ [] a∶A ⟩
-                    B [ var a / x ] ∶ _ 𝒰 ∈ Γ [ var a / x ]C
-                ∎) B∶𝒰
-
-            type : var a ∶ B [ var a / x ] ∈ Γ [ var a / x ]C
-            type = (
-                    var b ∶ B ∈ var x ∶ A ∷ Γ
-                ≡⟨ cong (λ w → var w ∶ B ∈ var x ∶ A ∷ Γ) (PropEq.sym p) ⟩
-                    var x ∶ B ∈ var x ∶ A ∷ Γ
-                ∼⟨ J-subst-mono (var x ∶ A ∷ Γ) (var x ∶ B) ⟩
-                    (var x ∶ B) [ var a / x ]J ∈ (var x ∶ A ∷ Γ) [ var a / x ]C
-                ≡⟨ cong (λ w → w ∈ (var x ∶ A ∷ Γ) [ var a / x ]C) (a∶A-subst B (var a) x) ⟩
-                    var a ∶ B [ var a / x ] ∈ (var x ∶ A ∷ Γ) [ var a / x ]C
-                ∼⟨ C-subst-nub Γ [] a∶A ⟩
-                    var a ∶ B [ var a / x ] ∈ Γ [ var a / x ]C
-                ∎) b∶B
-Subst₁ Γ (K ∷ Δ) A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble (ctx-EXT hasUniv allCTX) B∶𝒰 b b∶B) | observation v T E eq | yes p
-    = Vble isCTX' univ a type
+Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | observation v T E eq | yes p
+    = Vble isCTX univ a type
     where
         open import Function.Related
         open EquationalReasoning
 
-        isCTX' : CTX (_ ∷ (Δ ++ Γ) [ var a / x ]C)
-        isCTX' = subst CTX (PropEq.sym eq) (ctx-EXT {!   !} {!   !}) -- subst CTX (PropEq.sym (CTX-subst-fresh Γ allCTX)) CTX-A
+        -- eq : (Δ ++ Γ) [ var a / x ]C ≡ var v ∶ T ∷ E
+        -- eq = ?
 
-        univ : B [ var a / x ] ∶ _ 𝒰 ∈ (K ∷ Δ ++ Γ) [ var a / x ]C
+        cc : {!   !}
+        cc = {!   !}
+
+        isCTX : CTX ((Δ ++ Γ) [ var a / x ]C)
+        isCTX = isCTX-lemma Γ Δ A a x CTX-A CTX-B a∶A
+
+        univ : B [ var a / x ] ∶ _ 𝒰 ∈ (Δ ++ Γ) [ var a / x ]C
         univ = (
-                B ∶ _ 𝒰 ∈ K ∷ Δ ++ var x ∶ A ∷ Γ
-            ∼⟨ J-subst-mono (K ∷ Δ ++ var x ∶ A ∷ Γ) (B ∶ _ 𝒰) ⟩
-                B [ var a / x ] ∶ _ 𝒰 ∈  (K ∷ Δ ++ var x ∶ A ∷ Γ) [ var a / x ]C
-            ∼⟨ C-subst-nub Γ (K ∷ Δ) a∶A ⟩
-                B [ var a / x ] ∶ _ 𝒰 ∈ (K ∷ Δ ++ Γ) [ var a / x ]C
+                B ∶ _ 𝒰 ∈ Δ ++ var x ∶ A ∷ Γ
+            ∼⟨ J-subst-mono (Δ ++ var x ∶ A ∷ Γ) (B ∶ _ 𝒰) ⟩
+                B [ var a / x ] ∶ _ 𝒰 ∈  (Δ ++ var x ∶ A ∷ Γ) [ var a / x ]C
+            ∼⟨ C-subst-nub Γ Δ a∶A ⟩
+                B [ var a / x ] ∶ _ 𝒰 ∈ (Δ ++ Γ) [ var a / x ]C
             ∎) B∶𝒰
 
-        type : var a ∶ B [ var a / x ] ∈ (K ∷ Δ ++ Γ) [ var a / x ]C
+        type : var a ∶ B [ var a / x ] ∈ (Δ ++ Γ) [ var a / x ]C
         type = (
-                var b ∶ B ∈ K ∷ Δ ++ var x ∶ A ∷ Γ
-            ≡⟨ cong (λ w → var w ∶ B ∈ K ∷ Δ ++ var x ∶ A ∷ Γ) (PropEq.sym p) ⟩
-                var x ∶ B ∈ K ∷ Δ ++ var x ∶ A ∷ Γ
-            ∼⟨ J-subst-mono (K ∷ Δ ++ var x ∶ A ∷ Γ) (var x ∶ B) ⟩
-                (var x ∶ B) [ var a / x ]J ∈ (K ∷ Δ ++ var x ∶ A ∷ Γ) [ var a / x ]C
-            ≡⟨ cong (λ w → w ∈ (K ∷ Δ ++ var x ∶ A ∷ Γ) [ var a / x ]C) (a∶A-subst B (var a) x) ⟩
-                var a ∶ B [ var a / x ] ∈ (K ∷ Δ ++ var x ∶ A ∷ Γ) [ var a / x ]C
-            ∼⟨ C-subst-nub Γ (K ∷ Δ) a∶A ⟩
-                var a ∶ B [ var a / x ] ∈ (K ∷ Δ ++ Γ) [ var a / x ]C
+                var b ∶ B ∈ Δ ++ var x ∶ A ∷ Γ
+            ≡⟨ cong (λ w → var w ∶ B ∈ Δ ++ var x ∶ A ∷ Γ) (PropEq.sym p) ⟩
+                var x ∶ B ∈ Δ ++ var x ∶ A ∷ Γ
+            ∼⟨ J-subst-mono (Δ ++ var x ∶ A ∷ Γ) (var x ∶ B) ⟩
+                (var x ∶ B) [ var a / x ]J ∈ (Δ ++ var x ∶ A ∷ Γ) [ var a / x ]C
+            ≡⟨ cong (λ w → w ∈ (Δ ++ var x ∶ A ∷ Γ) [ var a / x ]C) (a∶A-subst B (var a) x) ⟩
+                var a ∶ B [ var a / x ] ∈ (Δ ++ var x ∶ A ∷ Γ) [ var a / x ]C
+            ∼⟨ C-subst-nub Γ Δ a∶A ⟩
+                var a ∶ B [ var a / x ] ∈ (Δ ++ Γ) [ var a / x ]C
             ∎) b∶B
-Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | observation v T E eq | no ¬p = {!   !}
+Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | observation v T E eq | no ¬p
+    = Vble isCTX univ b type
+    where
+        open import Function.Related
+        open EquationalReasoning
+
+        isCTX : CTX ((Δ ++ Γ) [ var a / x ]C)
+        isCTX = isCTX-lemma Γ Δ A a x CTX-A CTX-B a∶A
+
+        univ : B [ var a / x ] ∶ _ 𝒰 ∈ (Δ ++ Γ) [ var a / x ]C
+        univ = (
+                B ∶ _ 𝒰 ∈ Δ ++ var x ∶ A ∷ Γ
+            ∼⟨ J-subst-mono (Δ ++ var x ∶ A ∷ Γ) (B ∶ _ 𝒰) ⟩
+                B [ var a / x ] ∶ _ 𝒰 ∈  (Δ ++ var x ∶ A ∷ Γ) [ var a / x ]C
+            ∼⟨ C-subst-nub Γ Δ a∶A ⟩
+                B [ var a / x ] ∶ _ 𝒰 ∈ (Δ ++ Γ) [ var a / x ]C
+            ∎) B∶𝒰
+
+        type : var b ∶ B [ var a / x ] ∈ (Δ ++ Γ) [ var a / x ]C
+        type = (
+                var b ∶ B ∈ Δ ++ var x ∶ A ∷ Γ
+            ∼⟨ J-subst-mono (Δ ++ var x ∶ A ∷ Γ) (var b ∶ B) ⟩
+                var b [ var a / x ] ∶ B [ var a / x ] ∈ (Δ ++ var x ∶ A ∷ Γ) [ var a / x ]C
+            ≡⟨ cong (λ w → w ∶ B [ var a / x ] ∈ (Δ ++ var x ∶ A ∷ Γ) [ var a / x ]C) (subst-fresh ¬p) ⟩
+                var b ∶ B [ var a / x ] ∈ (Δ ++ var x ∶ A ∷ Γ) [ var a / x ]C
+            ∼⟨ C-subst-nub Γ Δ a∶A ⟩
+                var b ∶ B [ var a / x ] ∈ (Δ ++ Γ) [ var a / x ]C
+            ∎) b∶B
 -- Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) Q with (Δ ++ Γ) [ var a / x ]C | inspect (λ C → C [ var a / x ]C) (Δ ++ Γ)
 -- Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) Q | [] | inspect[ eq ] = contradiction a∶A (Subst₁-empty-context Γ Δ A eq)
 -- Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | a₁ ∶ A₁ ∷ E | inspect[ eq ] = {! a∶A  !}
@@ -300,162 +355,3 @@ Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B)
 -- Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (Vble CTX-B B∶𝒰 b b∶B) | A₁ ≣ B₁ ∶ 𝒾 𝒰 ∷ E | inspect[ eq ] = {!   !}
 Subst₁ Γ Δ A B x (Vble CTX-A A∶𝒰 a a∶A) (transport-∶ Q Q₁) = {!   !}
 Subst₁ Γ Δ A B x (transport-∶ P P₁) Q = {!   !}
-
-
-
--- Subst₁-lemma1 : ∀ Γ e x
---     → (ctx : All (CtxProp x) Γ)
---     → Γ [ var e / x ]C ≡ Γ
--- Subst₁-lemma1 [] e x []     = refl
--- Subst₁-lemma1 ((var w ∶ A)   ∷ Γ) e x (px ∷ ctx) with w ≟str x
--- Subst₁-lemma1 (var w ∶ A ∷ Γ) e x (prop ∷ ctx) | yes p = contradiction (sym p) (proj₁ prop)
--- Subst₁-lemma1 (var w ∶ A ∷ Γ) e x (prop ∷ ctx) | no ¬p =
---     ≡begin
---         var w ∶ A [ var e / x ] ∷ Γ [ var e / x ]C
---     ≡⟨ cong (λ term → var w ∶ term ∷ Γ [ var e / x ]C) (fresh-substitution (proj₂ prop)) ⟩
---         var w ∶ A ∷ Γ [ var e / x ]C
---     ≡⟨ cong (λ Δ → var w ∶ A ∷ Δ) (Subst₁-lemma1 Γ e x ctx) ⟩
---         var w ∶ A ∷ Γ
---     ≡∎
---     where
---         open PropEq.≡-Reasoning renaming (begin_ to ≡begin_; _∎ to _≡∎)
--- Subst₁-lemma1 ((a ≣ b ∶ A)   ∷ Γ) e x (() ∷ ctx)
--- Subst₁-lemma1 ((    A ∶ 𝒾 𝒰) ∷ Γ) e x (() ∷ ctx)
--- Subst₁-lemma1 ((A ≣ B ∶ 𝒾 𝒰) ∷ Γ) e x (() ∷ ctx)
---
--- Subst₁-lemma2 : ∀ B a b x
---     → b ≡ x
---     → (var b ∶ B) [ var a / x ]J ≡ var a ∶ B [ var a / x ]
--- Subst₁-lemma2 B a b x b≡x with b ≟str x
--- Subst₁-lemma2 B a b x b≡x | yes p = refl
--- Subst₁-lemma2 B a b x b≡x | no ¬p = contradiction b≡x ¬p
---
--- Subst₁-lemma3 : ∀ B a b x
---     → b ≢ x
---     → (var b ∶ B) [ var a / x ]J ≡ var b ∶ B [ var a / x ]
--- Subst₁-lemma3 B a b x b≢x with b ≟str x
--- Subst₁-lemma3 B a b x b≢x | yes p = contradiction p b≢x
--- Subst₁-lemma3 B a b x b≢x | no ¬p = refl
---
--- -- ctx-EXT : ∀ {𝒾 Γ A x}≡
--- --     → Γ ⊢ A ∶ 𝒾 𝒰
--- --     → All (CtxProp x) Γ
--- --     → CTX ((var x ∶ A) ∷ Γ)
--- -- CTX-tail : ∀ Γ A x → CTX (var x ∶ A ∷ Γ) → CTX Γ
--- -- CTX-tail []                A x (ctx-EXT A∶𝒰 prop) = ctx-EMP
--- -- CTX-tail (var v ∶ B   ∷ Γ) A x (ctx-EXT A∶𝒰 (px ∷ prop)) with x ≟str v
--- -- CTX-tail (var v ∶ B   ∷ Γ) A x (ctx-EXT A∶𝒰 (px ∷ prop)) | yes p = contradiction p (proj₁ px)
--- -- CTX-tail (var v ∶ B   ∷ Γ) A x (ctx-EXT A∶𝒰 (px ∷ prop)) | no ¬p = ctx-EXT {!    !} {!   !}
--- -- CTX-tail (a ≣ b ∶ B   ∷ Γ) A x (ctx-EXT A∶𝒰 (() ∷ prop))
--- -- CTX-tail (    B ∶ 𝒾 𝒰 ∷ Γ) A x (ctx-EXT A∶𝒰 (() ∷ prop))
--- -- CTX-tail (B ≣ C ∶ 𝒾 𝒰 ∷ Γ) A x (ctx-EXT A∶𝒰 (() ∷ prop))
---
--- Subst₁ : ∀ Γ Δ A B {a} {b} x
---     →                   Γ ⊢ a           ∶ A             -- JA
---     →  Δ ++ var x ∶ A ∷ Γ ⊢ b           ∶ B             -- JB
---     → (Δ ++ Γ) [ a / x ]C ⊢ b [ a / x ] ∶ B [ a / x ]
--- Subst₁ [] Δ A B x (Vble CTX-JA A∶𝒰 a ()) (Vble CTX-JB B∶𝒰 b b∶B)
--- Subst₁ (J ∷ Γ) [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) with b ≟str x
--- Subst₁ (J ∷ Γ) [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble (ctx-EXT _ prop) B∶𝒰 b b∶B) | yes p =
---     Vble ctx hasType a hasVar
---     where
---         lemma : (J ∷ Γ) [ var a / x ]C ≡ J ∷ Γ
---         lemma = Subst₁-lemma1 _ a x prop
---
---         ctx : CTX ((J ∷ Γ) [ var a / x ]C)
---         ctx = subst CTX (sym lemma) CTX-JA
---
---         hasType' : B [ var a / x ] ∶ _ 𝒰 ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C
---         hasType' = J-subst-mono (var x ∶ A ∷ J ∷ Γ) (B ∶ _ 𝒰) (var a) x B∶𝒰
---
---         hasType : B [ var a / x ] ∶ _ 𝒰 ∈ (J ∷ Γ) [ var a / x ]C
---         hasType = C-subst-nub (J ∷ Γ) A (var a) x a∶A hasType' --
---
---         hasVar'' : (var b ∶ B) [ var a / x ]J ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C
---         hasVar'' = J-subst-mono (var x ∶ A ∷ J ∷ Γ) (var b ∶ B) (var a) x b∶B
---
---         lemma2 : (var b ∶ B) [ var a / x ]J ≡ var a ∶ B [ var a / x ]
---         lemma2 = Subst₁-lemma2 B a b x p
---
---         hasVar' : var a ∶ B [ var a / x ] ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C
---         hasVar' = subst (λ w → w ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C) lemma2 hasVar''
---         -- hasVar' : var a ∶ B [ var a / x ] ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C
---         -- hasVar' = J-subst-mono (var x ∶ A ∷ J ∷ Γ) {! var a ∶ B  !} (var a) x b∶B'
---         -- b ≡ x that's why we have 'var a ∶ ...'
---         hasVar : var a ∶ B [ var a / x ] ∈ (J ∷ Γ) [ var a / x ]C
---         hasVar = C-subst-nub (J ∷ Γ) A (var a) x a∶A hasVar'
---
--- Subst₁ (J ∷ Γ) [] A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble (ctx-EXT _ prop) B∶𝒰 b b∶B) | no ¬p =
---     Vble ctx hasType b hasVar
---     where
---         lemma : (J ∷ Γ) [ var a / x ]C ≡ J ∷ Γ
---         lemma = Subst₁-lemma1 _ a x prop
---
---         ctx : CTX ((J ∷ Γ) [ var a / x ]C)
---         ctx = subst CTX (sym lemma) CTX-JA
---
---         hasType' : B [ var a / x ] ∶ _ 𝒰 ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C
---         hasType' = J-subst-mono (var x ∶ A ∷ J ∷ Γ) (B ∶ _ 𝒰) (var a) x B∶𝒰
---
---         hasType : B [ var a / x ] ∶ _ 𝒰 ∈ (J ∷ Γ) [ var a / x ]C
---         hasType = C-subst-nub (J ∷ Γ) A (var a) x a∶A hasType'
---
---         hasVar'' : (var b ∶ B) [ var a / x ]J ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C
---         hasVar'' = J-subst-mono (var x ∶ A ∷ J ∷ Γ) (var b ∶ B) (var a) x b∶B
---         --
---         lemma2 : (var b ∶ B) [ var a / x ]J ≡ var b ∶ B [ var a / x ]
---         lemma2 = Subst₁-lemma3 B a b x ¬p
---
---         hasVar' : var b ∶ B [ var a / x ] ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C
---         hasVar' = subst (λ w → w ∈ (var x ∶ A ∷ J ∷ Γ) [ var a / x ]C) lemma2 hasVar''
---
---         hasVar : var b ∶ B [ var a / x ] ∈ (J ∷ Γ) [ var a / x ]C
---         hasVar = C-subst-nub (J ∷ Γ) A (var a) x a∶A hasVar' -- C-subst-nub (J ∷ Γ) A (var a) x a∶A hasVar'
---
--- Subst₁ (J ∷ Γ) (K ∷ Δ) A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) with (K ∷ Δ ++ J ∷ Γ) [ var a / x ]C | inspect (λ w → (K ∷ Δ ++ J ∷ Γ) [ var a / w ]C) x
--- Subst₁ (J ∷ Γ) (K ∷ Δ) A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) | [] | inspect[ () ]
--- Subst₁ (J ∷ Γ) (K ∷ Δ) A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) | L ∷ E | inspect[ eq ] with b ≟str x
--- Subst₁ (J ∷ Γ) (K ∷ Δ) A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) | L ∷ E | inspect[ eq ] | yes p =
---     Vble ctx {!   !} {!   !} {!   !}
---     where
---
---         ctx : CTX (L ∷ E)
---         ctx = {! ctx-EXT  !}
---
--- Subst₁ (J ∷ Γ) (K ∷ Δ) A B x (Vble CTX-JA A∶𝒰 a a∶A) (Vble CTX-JB B∶𝒰 b b∶B) | L ∷ E | inspect[ eq ] | no ¬p = {!   !}
---     -- {! Vble  !}
--- Subst₁ Γ Δ A B x (Vble CTX-Γ U v ∈Γ) (transport-∶ Q Q₁) = {!   !}
--- Subst₁ Γ Δ A B x (transport-∶ P P₁) Q = {!   !}
--- -- Subst₁ Γ Δ A B .(var _) b x (Vble P Q R) (≣-transport₁ S T) = {!   !}
--- -- Subst₁ Γ Δ A B a b x (≣-transport₁ P Q) S = {!   !}
--- --
--- -- -- Subst₁ Γ Δ A B a b {x} (in-context P) (in-context Q) = in-context (lemma start)
--- -- --     where
--- -- --         start : b [ a / x ] ∶ B [ a / x ] ∈ (Δ ++ var x ∶ A ∷ Γ) [ a / x ]C
--- -- --         start = J-subst-mono (Δ ++ var x ∶ A ∷ Γ) (_ ∶ _) a x Q
--- -- --
--- -- --         lemma : (Δ ++ var x ∶ A ∷ Γ) [ a / x ]C ⊆ (Δ ++ Γ) [ a / x ]C
--- -- --         lemma = begin
--- -- --                     (Δ ++ var x ∶ A ∷ Γ) [ a / x ]C
--- -- --                 ≈⟨ ++-context-substitution Δ (var x ∶ A ∷ Γ) ⟩
--- -- --                     Δ [ a / x ]C ++ (var x ∶ A ∷ Γ) [ a / x ]C
--- -- --                 ≤⟨ ++-left-mono (Δ [ a / x ]C) (sbst-lemma2 Γ A a x P) ⟩
--- -- --                     Δ [ a / x ]C ++ Γ [ a / x ]C
--- -- --                 ≈⟨ ≋-sym (++-context-substitution Δ Γ) ⟩
--- -- --                     (Δ ++ Γ) [ a / x ]C
--- -- --                 ∎
--- -- -- Subst₁ Γ Δ A B a b {x} (in-context P) (Vble Q) = in-context {! J-subst-mono (Δ ++ var x ∶ A ∷ Γ) (_ ∶ _) a x   !}
--- -- -- Subst₁ Γ Δ A B a b (in-context P) (≣-transport₁ Q Q₁) = {!   !}
--- -- -- Subst₁ Γ Δ A B a b (Vble Γ-ctx) Q = {!   !}
--- -- -- Subst₁ Γ Δ A B a b (≣-transport₁ Γ⊢a∶A Γ⊢A∶A) Q = {!   !}
--- -- -- infix 3 _⊢_
--- -- -- _⊢_ : Context → Judgement → Set
--- -- -- Γ ⊢ J = J ∈ Γ
--- -- --
--- -- -- data CTX : Context → Set where
--- -- --     ctx-EMP : CTX []
--- -- --     ctx-EXT : ∀ {Γ A 𝒰 x} → Γ ⊢ A ∶ 𝒰 → CTX ((x ∶ A) ∷ Γ)
--- --
--- -- -- data Structural : Set where
--- -- --     Vble : ∀ {Γ x A} → CTX Γ → Γ ⊢ x ∶ A → Structural
--- -- --     subst₁ : ∀ {Γ Δ a b x A B} → Γ ⊢ a ∶ A
