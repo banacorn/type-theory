@@ -1,6 +1,7 @@
 module Judgement where
 
 open import Data.List
+open import Data.List.All as All hiding (map)
 open import Data.Nat
 open import Data.Product hiding (map)
 open import Data.String using (String) renaming (_≟_ to _≟str_)
@@ -124,6 +125,13 @@ self-subst (var x') x | yes p | no ¬q = refl
 self-subst (var x') x | no ¬p | yes q = refl
 self-subst (var x') x | no ¬p | no ¬q = refl
 
+C-subst-fresh : ∀ {Γ variable expr}
+    → All (_FreshInJudgement_ variable) Γ
+    → Γ [ expr / variable ]C ≡ Γ
+C-subst-fresh {[]}    {variable} {expr} pxs = refl
+C-subst-fresh {J ∷ Γ} {variable} {expr} (px ∷ pxs)
+    = cong₂ _∷_ (J-subst-fresh px) (C-subst-fresh pxs)
+
 a∶A-subst : ∀ A a x → (var x ∶ A) [ a / x ]J ≡ a ∶ A [ a / x ]
 a∶A-subst A a x with x ≟str x
 a∶A-subst A a x | yes p = refl
@@ -133,6 +141,13 @@ nub : {xs : Context} {y : Judgement} → y ∈ xs → y ∷ xs ⊆ xs
 nub {[]}     ()   x∈y∷xs
 nub {x ∷ xs} y∈xs (here refl) = y∈xs
 nub {x ∷ xs} y∈xs (there p)   = p
+
+weakening : ∀ {a} {A : Set a}
+    → (xs ys : List A) → (y : A)
+    → xs ++ ys ⊆ xs ++ y ∷ ys
+weakening xs ys y P = ++-cong {xs₁ = xs} (λ w → w) there P
+    where
+        open import Data.List.Any.BagAndSetEquality using (++-cong)
 
 C-subst-++ : ∀ {e x} Γ Δ
     → (Γ ++ Δ) [ e / x ]C ≡ Γ [ e / x ]C ++ Δ [ e / x ]C
