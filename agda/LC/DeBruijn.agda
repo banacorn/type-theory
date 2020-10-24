@@ -4,13 +4,6 @@ open import Data.Nat
 open import Data.Empty
 open import Relation.Nullary
 
--- the index `level` denotes the number of `abs`, i.e., the least binding number
--- for a variable to be free
--- data Term : (#abs : ℕ) → Set where
---     var : ℕ → Term 0
---     abs : ∀ {n} → Term n → Term (suc n)
---     app : ∀ {m n o} → (body : Term m) → (term : Term n) → Term o
-
 data Term : Set where
     var : ℕ → Term
     abs : Term → Term

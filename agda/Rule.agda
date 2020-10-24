@@ -18,26 +18,13 @@ open import Data.List.Any as Any hiding (map)
 open import Data.List.Any.Membership.Propositional
 
 mutual
-
-    OfHasType : Judgement → Set
-    OfHasType (    a ∶   A) = ⊤
-    OfHasType (a ≣ b ∶   A) = ⊥
-    OfHasType (    A ∶ 𝒾 𝒰) = ⊥
-    OfHasType (A ≣ B ∶ 𝒾 𝒰) = ⊥
-    --
-    -- record IsCTX (v : Variable) (j : Judgement) : Set where
-    --     constructor ctx
-    --     field
-    --         ofHasType : OfHasType j
-    --         fresh : v FreshInJudgement j
-
     data CTX : List Judgement → Set where
         ctx-EMP : CTX []
         ctx-EXT : ∀ {𝒾 Γ A x}
-            → (hasUniv : Γ ⊢ A ∶ 𝒾 𝒰)
-            → (freshInType :  x FreshIn A)
-            → (allFresh :     All (_FreshInJudgement_ x) Γ)
-            → (allOfHasType : All OfHasType Γ)
+            → (A∶𝒰 : Γ ⊢ A ∶ 𝒾 𝒰)
+            → (x#A : x # A)
+            → (x∶A#Γ : var x ∶ A ♯C Γ)
+            → (CTX-Γ : CTX Γ)
             → CTX ((var x ∶ A) ∷ Γ)
 
     infix 3 _⊢_
@@ -105,13 +92,13 @@ mutual
 -- CTX-wellformed (J ∷ Γ) a A (transport-∶ P ())
 
 CTX-fresh : ∀ Γ Δ {x variable A}
-    → All (_FreshInJudgement_ variable) (Δ ++ var x ∶ A ∷ Γ)
+    → variable #C (Δ ++ var x ∶ A ∷ Γ)
     → variable ≢ x
 CTX-fresh Γ []      (fresh ∷ restFresh) = proj₁ fresh
 CTX-fresh Γ (K ∷ Δ) (fresh ∷ restFresh) = CTX-fresh Γ Δ restFresh
 
 CTX-subst-fresh : ∀ Γ {variable expr}
-    → All (_FreshInJudgement_ variable) Γ
+    → variable #C Γ
     → Γ [ expr / variable ]C ≡ Γ
 CTX-subst-fresh []      [] = refl
 CTX-subst-fresh (J ∷ Γ) (fresh ∷ restFresh)
@@ -222,50 +209,38 @@ Univ-Wkg₁ {suc 𝒾} Γ Δ (𝒰-CUMUL B∶𝒰) = 𝒰-CUMUL (Univ-Wkg₁ Γ 
 -- Weakening Lemmata
 module Weakening where
 
+    ♯C-weakening : ∀ Γ Δ {A x V v}
+        → var v ∶ V ♯C (Δ ++ Γ)
+        → var v ∶ V ♯C (Δ ++ var x ∶ A ∷ Γ)
+    ♯C-weakening Γ []       P = {!   !} ∷ P
+    ♯C-weakening Γ (K ∷ Δ)  (v#K ∷ P) = {!   !}
 
     CTX-Wkg₁ : ∀ {𝒾} Γ Δ A x
         → Γ ⊢ A ∶ 𝒾 𝒰
-        → x FreshIn A
-        → All (_FreshInJudgement_ x) (Δ ++ Γ)
+        → x # A
+        → var x ∶ A ♯C (Δ ++ Γ)
         → CTX (Δ ++ Γ)
         → CTX (Δ ++ var x ∶ A ∷ Γ)
-    CTX-Wkg₁ [] [] A x A∶𝒰 x-fresh x-allFresh isCTX
-        = ctx-EXT A∶𝒰 x-fresh x-allFresh []
-    CTX-Wkg₁ (.(var _ ∶ _) ∷ Γ) [] A x A∶𝒰 x-fresh x-allFresh
-        (ctx-EXT hasUniv freshInType allFresh allOfHasType)
-        = ctx-EXT A∶𝒰 x-fresh x-allFresh (tt ∷ allOfHasType)
-    CTX-Wkg₁ Γ ((var b ∶ B) ∷ Δ) A x A∶𝒰 x-fresh x-allFresh
-        (ctx-EXT B∶𝒰 freshInType allFresh allOfHasType)
-        = ctx-EXT (Univ-Wkg₁ Γ Δ B∶𝒰) freshInType prop1 {!   !}
-        where
-            ¬sym : ∀ {x y} → x ≢ y → y ≢ x
-            ¬sym neq eq = neq (PropEq.sym eq)
+    CTX-Wkg₁ Γ [] A x A∶𝒰 x#A x∶A#Γ isCTX
+        = ctx-EXT A∶𝒰 x#A x∶A#Γ isCTX
+    CTX-Wkg₁ Γ (.(var _ ∶ _) ∷ Δ) A x A∶𝒰 x#A (ps ∷ x∶A#Γ) (ctx-EXT V∶𝒰 v#V v∶V#Γ isCTX)
+        = ctx-EXT (Univ-Wkg₁ Γ Δ V∶𝒰) v#V (♯C-weakening Γ Δ {! ps  !})
+            (CTX-Wkg₁ Γ Δ A x A∶𝒰 x#A x∶A#Γ isCTX)
+    -- CTX-Wkg₁ Γ (.(var _ ∶ _) ∷ Δ) A x A∶𝒰 x∶A#Γ (ctx-EXT V∶𝒰 v#V v#Γ isCTX)
+    --     = ctx-EXT (Univ-Wkg₁ Γ Δ V∶𝒰) v#V (#C-weakening Γ Δ {!   !} v#Γ) (CTX-Wkg₁ Γ Δ A x A∶𝒰 x#A x#Γ isCTX)
 
-            open import Data.List.All.Properties using (++⁺; ++⁻ˡ; ++⁻ʳ)
-            prop1 : All (_FreshInJudgement_ _) (Δ ++ var x ∶ A ∷ Γ)
-            prop1 = ++⁺ (++⁻ˡ Δ allFresh)
-                ((¬sym (proj₁ (head x-allFresh)) , {!   !}) ∷ ++⁻ʳ Δ allFresh)
-    -- CTX-Wkg₁ [] (.(var _ ∶ _) ∷ Δ) A x A∶𝒰 x-fresh x-allFresh
-    --     (ctx-EXT hasUniv freshInType allFresh allOfHasType)
-    --     = ctx-EXT (Univ-Wkg₁ hasUniv) freshInType {!  allFresh !} {!   !}
-    -- CTX-Wkg₁ (J ∷ Γ) (.(var _ ∶ _) ∷ Δ) A x A∶𝒰 x-fresh x-allFresh
-    --     (ctx-EXT hasUniv freshInType allFresh allOfHasType)
-    --     = ctx-EXT (Univ-Wkg₁ hasUniv) freshInType {!   !} {!   !}
-        -- where
-        --     goal1 : All (_FreshInJudgement_ _) (_ ∷ Δ ++ J ∷ Γ)
-        --     goal1 = x-fresh ∷ allFresh
 
 Wkg₁ : ∀ {𝒾} Γ Δ A B {b} x
-    → x FreshIn A
-    → All (_FreshInJudgement_ x) (Δ ++ Γ)
+    → x # A
+    → var x ∶ A ♯C (Δ ++ Γ)
     → Γ ⊢ A ∶ 𝒾 𝒰
     → Δ ++ Γ ⊢ b ∶ B
     → Δ ++ var x ∶ A ∷ Γ ⊢ b ∶ B
-Wkg₁ Γ Δ A B x x-fresh x-allFresh A∶𝒰 (Vble isCTX B∶𝒰 b b∶B)
+Wkg₁ Γ Δ A B x x#A x∶A#Γ A∶𝒰 (Vble isCTX B∶𝒰 b b∶B)
     = Vble ctx univ _ type
     where
         ctx : CTX (Δ ++ var x ∶ A ∷ Γ)
-        ctx = Weakening.CTX-Wkg₁ Γ Δ A x A∶𝒰 x-fresh x-allFresh isCTX
+        ctx = Weakening.CTX-Wkg₁ Γ Δ A x A∶𝒰 x#A x∶A#Γ isCTX
 
         univ : B ∶ _ 𝒰 ∈ Δ ++ var x ∶ A ∷ Γ
         univ = weakening Δ Γ (var x ∶ A) B∶𝒰
@@ -273,7 +248,7 @@ Wkg₁ Γ Δ A B x x-fresh x-allFresh A∶𝒰 (Vble isCTX B∶𝒰 b b∶B)
         type : var b ∶ B ∈ Δ ++ var x ∶ A ∷ Γ
         type = weakening Δ Γ (var x ∶ A) b∶B
 
-Wkg₁ Γ Δ A B x x-fresh x-allFresh A∶𝒰 (transport-∶ Q ())
+Wkg₁ Γ Δ A B x x#A x#Γ A∶𝒰 (transport-∶ Q ())
 -- Wkg₁ [] [] A B .(var x₁) x x-fresh x-allFresh P (Vble isCTX A∶𝒰 x₁ x∶A)
 --     = Vble ctx univ x₁ type
 --     where

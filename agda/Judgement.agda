@@ -20,8 +20,8 @@ Variable = String
 data Term : Set where
     var : String → Term
 
-_FreshIn_ : Variable → Term → Set
-variable FreshIn var x = variable ≢ x
+_#_ : Variable → Term → Set
+variable # var x = variable ≢ x
 
 -- Term substitution
 infix 200 _[_/_]
@@ -31,7 +31,7 @@ var x [ expr / variable ] | yes p = expr
 var x [ expr / variable ] | no ¬p = var x
 
 subst-fresh : ∀ {term variable expr}
-    → variable FreshIn term
+    → variable # term
     → term [ expr / variable ] ≡ term
 subst-fresh {var x} {variable} fresh with variable ≟str x
 subst-fresh {var x} {variable} fresh | yes p = contradiction p fresh
@@ -56,14 +56,23 @@ _[_/_]J : Judgement → Term → Variable → Judgement
 (    A ∶ 𝒾 𝒰) [ expr / x ]J = A [ expr / x ] ∶ 𝒾 𝒰
 (A ≣ B ∶ 𝒾 𝒰) [ expr / x ]J = A [ expr / x ] ≣ B [ expr / x ] ∶ 𝒾 𝒰
 
-_FreshInJudgement_ : Variable → Judgement → Set
-variable FreshInJudgement (    a ∶ A)   = variable FreshIn a × variable FreshIn A
-variable FreshInJudgement (a ≣ b ∶ A)   = variable FreshIn a × variable FreshIn b × variable FreshIn A
-variable FreshInJudgement (    A ∶ 𝒾 𝒰) = variable FreshIn A
-variable FreshInJudgement (A ≣ B ∶ 𝒾 𝒰) = variable FreshIn A × variable FreshIn B
+_#J_ : Variable → Judgement → Set
+variable #J (    a ∶ A)   = variable # a × variable # A
+variable #J (a ≣ b ∶ A)   = variable # a × variable # b × variable # A
+variable #J (    A ∶ 𝒾 𝒰) = variable # A
+variable #J (A ≣ B ∶ 𝒾 𝒰) = variable # A × variable # B
+
+_T#J_ : Term → Judgement → Set
+var x T#J J = x #J J
+
+_♯J_ : Judgement → Judgement → Set
+(    a ∶ A) ♯J J = a T#J J × A T#J J
+(a ≣ b ∶ A) ♯J J = a T#J J × b T#J J × A T#J J
+(    A ∶ 𝒾 𝒰) ♯J J = A T#J J
+(A ≣ B ∶ 𝒾 𝒰) ♯J J = A T#J J × B T#J J
 
 J-subst-fresh : ∀ {judgement variable expr}
-    → variable FreshInJudgement judgement
+    → variable #J judgement
     → judgement [ expr / variable ]J ≡ judgement
 J-subst-fresh {      a ∶ A} (a-fresh , A-fresh) = cong₂ _∶_ (subst-fresh a-fresh) (subst-fresh A-fresh)
 J-subst-fresh {a ≣ b ∶   A} (a-fresh , b-fresh , A-fresh) =
@@ -91,6 +100,12 @@ Context = List Judgement
 infix 200 _[_/_]C
 _[_/_]C : Context → Term → Variable → Context
 context [ expr / x ]C = map (λ j → j [ expr / x ]J) context
+
+_#C_ : Variable → Context → Set
+x #C Γ = All (_#J_ x) Γ
+
+_♯C_ : Judgement → Context → Set
+J ♯C Γ = All (_♯J_ J) Γ
 
 open import Data.List.Any
 open import Data.List.Any.Membership.Propositional
@@ -126,7 +141,7 @@ self-subst (var x') x | no ¬p | yes q = refl
 self-subst (var x') x | no ¬p | no ¬q = refl
 
 C-subst-fresh : ∀ {Γ variable expr}
-    → All (_FreshInJudgement_ variable) Γ
+    → All (_#J_ variable) Γ
     → Γ [ expr / variable ]C ≡ Γ
 C-subst-fresh {[]}    {variable} {expr} pxs = refl
 C-subst-fresh {J ∷ Γ} {variable} {expr} (px ∷ pxs)
